@@ -1,47 +1,73 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { usePokeAPI } from '../hooks/usePokeAPI';
 import { TYPE_COLORS } from '../utils/typeMatchups';
 import type { BaseStat, PokemonType, TeamPokemon } from '../types/pokemon.types';
-import { useSound } from '../hooks/useSound';
 import toast from 'react-hot-toast';
+import { useSound } from '../hooks/useSound';
 import PokemonAutocomplete from './PokemonAutocomplete';
 import AbilityAutocomplete from './AbilityAutocomplete';
 import StatsEditor from './StatsEditor';
+import PokemonDetailModal from './PokemonDetailModal';
 
 const DEFAULT_STATS: BaseStat = { hp: 45, attack: 45, defense: 45, spAtk: 45, spDef: 45, speed: 45 };
+
+function calculateActualStats(baseStats: BaseStat, level: number): BaseStat {
+  const iv = 15;
+  const actualStats: Partial<BaseStat> = {};
+  for (const key in baseStats) {
+    const statKey = key as keyof BaseStat;
+    const base = baseStats[statKey];
+    if (statKey === 'hp') {
+      actualStats[statKey] = Math.floor((2 * base + iv) * level / 100) + level + 10;
+    } else {
+      actualStats[statKey] = Math.floor((Math.floor((2 * base + iv) * level / 100) + 5));
+    }
+  }
+  return actualStats as BaseStat;
+}
 
 export default function PCBox() {
   const pc             = useGameStore(s => s.pc);
   const team           = useGameStore(s => s.team);
+  const addToPC        = useGameStore(s => s.addToPC);
   const moveToTeam     = useGameStore(s => s.moveToTeam);
   const removeFromPC   = useGameStore(s => s.removeFromPC);
   const sendToCemetery = useGameStore(s => s.sendToCemetery);
-  const addToPC        = useGameStore(s => s.addToPC);
+  const updatePokemon  = useGameStore(s => s.updatePokemon);
   const { searchPokemon, buildTeamPokemon, loading } = usePokeAPI();
   const { play } = useSound();
 
-  const [showAdd,    setShowAdd]    = useState(false);
-  const [showDeath,  setShowDeath]  = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [filter,     setFilter]     = useState('');
-  const [deathForm,  setDeathForm]  = useState({ cause: '', killedBy: '' });
+  const [search,        setSearch]        = useState('');
+  const [showAdd,       setShowAdd]       = useState(false);
+  const [showDeath,     setShowDeath]     = useState(false);
+  const [selectedId,    setSelectedId]    = useState<string | null>(null);
+  const [editingId,     setEditingId]     = useState<string | null>(null);
+  const [deathForm,     setDeathForm]     = useState({ cause: '', killedBy: '' });
+  const [detailPokemon, setDetailPokemon] = useState<TeamPokemon | null>(null);
 
-  // Formulario agregar
-  const [search,           setSearch]           = useState('');
-  const [nickname,         setNickname]         = useState('');
-  const [route,            setRoute]            = useState('');
-  const [level,            setLevel]            = useState(5);
-  const [ability,          setAbility]          = useState('');
-  const [pokemonAbilities, setPokemonAbilities] = useState<string[]>([]);
-  const [customStats,      setCustomStats]      = useState<BaseStat>(DEFAULT_STATS);
-  const [useCustomStats,   setUseCustomStats]   = useState(false);
-  const [loadedStats,      setLoadedStats]      = useState<BaseStat | null>(null);
+  // Form agregar
+  const [searchQuery,       setSearchQuery]       = useState('');
+  const [nickname,          setNickname]          = useState('');
+  const [route,             setRoute]             = useState('');
+  const [level,             setLevel]             = useState(5);
+  const [ability,           setAbility]           = useState('');
+  const [pokemonAbilities,  setPokemonAbilities]  = useState<string[]>([]);
+  const [customStats,       setCustomStats]       = useState<BaseStat>(DEFAULT_STATS);
+  const [useCustomStats,    setUseCustomStats]    = useState(false);
+  const [loadedStats,       setLoadedStats]       = useState<BaseStat | null>(null);
 
-  const filtered = pc.filter(p =>
-    p.nickname.toLowerCase().includes(filter.toLowerCase()) ||
-    p.name.toLowerCase().includes(filter.toLowerCase())
-  );
+  // Form editar
+  const [editNick,    setEditNick]    = useState('');
+  const [editLevel,   setEditLevel]   = useState(5);
+  const [editAbility, setEditAbility] = useState('');
+  const [editStats,   setEditStats]   = useState<BaseStat>(DEFAULT_STATS);
+
+  const filtered = useMemo(() =>
+    pc.filter(p =>
+      p.nickname.toLowerCase().includes(search.toLowerCase()) ||
+      p.name.toLowerCase().includes(search.toLowerCase())
+    ), [pc, search]);
 
   const handlePokemonSelect = async (name: string) => {
     const result = await searchPokemon(name);
@@ -54,8 +80,8 @@ export default function PCBox() {
   };
 
   const handleAdd = async () => {
-    if (!search.trim()) return;
-    const result = await searchPokemon(search);
+    if (!searchQuery.trim()) return;
+    const result = await searchPokemon(searchQuery);
     if (!result) { toast.error('Pokémon no encontrado'); return; }
     const pokemon = buildTeamPokemon(result, nickname, route);
     addToPC({
@@ -65,29 +91,105 @@ export default function PCBox() {
       stats: useCustomStats ? customStats : result.stats,
     });
     play('catch');
-    toast.success(`${nickname || result.name} guardado en la PC`);
+    toast.success(`${nickname || result.name} añadido a la PC!`);
     setShowAdd(false);
-    setSearch(''); setNickname(''); setRoute(''); setLevel(5);
+    setSearchQuery(''); setNickname(''); setRoute(''); setLevel(5);
     setAbility(''); setPokemonAbilities([]); setCustomStats(DEFAULT_STATS);
     setUseCustomStats(false); setLoadedStats(null);
   };
 
-  const handleMoveToTeam = (id: string) => {
-    if (team.length >= 6) { toast.error('El equipo está lleno (máx. 6)'); return; }
-    moveToTeam(id); play('move'); toast.success('Movido al equipo activo');
+  const handleStartEdit = (p: TeamPokemon) => {
+    setEditingId(p.id);
+    setEditNick(p.nickname);
+    setEditLevel(p.level);
+    setEditAbility(p.ability);
+    setEditStats(p.stats);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingId) return;
+    updatePokemon(editingId, {
+      nickname: editNick,
+      level: editLevel,
+      ability: editAbility,
+      stats: editStats,
+    });
+    setEditingId(null);
+    toast.success('Pokémon actualizado');
   };
 
   const handleSendToCemetery = () => {
     if (!selectedId || !deathForm.cause.trim()) return;
     sendToCemetery(selectedId, deathForm.cause, deathForm.killedBy);
     play('death');
-    toast('🪦 Enviado al cementerio', { icon: '💀' });
+    toast('💀 Pokémon enviado al cementerio');
     setShowDeath(false); setSelectedId(null); setDeathForm({ cause: '', killedBy: '' });
   };
 
-  const resetForm = () => {
-    setShowAdd(false); setSearch(''); setLoadedStats(null);
-    setUseCustomStats(false); setPokemonAbilities([]); setAbility('');
+  const handleEvolve = async (pokemon: TeamPokemon) => {
+    const t = toast.loading(`Buscando evolución para ${pokemon.name}...`);
+    try {
+      const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${pokemon.name}`);
+      const species = await res.json();
+      const evoRes = await fetch(species.evolution_chain.url);
+      const evoData = await evoRes.json();
+
+      // Buscar la evolución siguiente en la cadena
+      const findNext = (chain: { species: { name: string }; evolves_to: typeof chain[] }): string | null => {
+        if (chain.species.name === pokemon.name) {
+          return chain.evolves_to[0]?.species.name ?? null;
+        }
+        for (const next of chain.evolves_to) {
+          const found = findNext(next);
+          if (found) return found;
+        }
+        return null;
+      };
+
+      const nextEvo = findNext(evoData.chain);
+      toast.dismiss(t);
+
+      if (!nextEvo) {
+        toast('Este Pokémon no tiene más evoluciones', { icon: 'ℹ️' });
+        return;
+      }
+
+      const evoResult = await searchPokemon(nextEvo);
+      if (!evoResult) { toast.error('No se pudo cargar la evolución'); return; }
+
+      updatePokemon(pokemon.id, {
+  pokedexId: evoResult.id,
+  name: evoResult.name,
+  types: evoResult.types,
+  sprite: evoResult.sprite,
+  spriteShiny: evoResult.spriteShiny,
+  stats: evoResult.stats,
+});
+      toast.success(`¡${pokemon.nickname} evolucionó a ${evoResult.name}!`);
+    } catch {
+      toast.dismiss(t);
+      toast.error('Error al buscar evolución');
+    }
+  };
+
+  const handleMoveToTeam = (id: string) => {
+    if (team.length >= 6) {
+      toast.error('El equipo ya está lleno (6/6)');
+      return;
+    }
+    moveToTeam(id);
+    play('move');
+    toast.success('Pokémon movido al equipo');
+  };
+
+  const handleExportShowdown = () => {
+    const text = pc.map(p => [
+      `${p.nickname} (${p.name.charAt(0).toUpperCase() + p.name.slice(1)})`,
+      `Ability: ${p.ability}`,
+      `Level: ${p.level}`,
+    ].join('\n')).join('\n\n');
+    navigator.clipboard.writeText(text);
+    toast.success('PC copiada en formato Showdown!');
   };
 
   return (
@@ -99,59 +201,79 @@ export default function PCBox() {
           <span className="text-white/40 text-sm font-normal">{pc.length} Pokémon</span>
         </h2>
         <div className="flex gap-2">
-          <input
-            className="bg-black/30 text-white text-sm rounded-lg px-3 py-1.5 border border-white/10 outline-none placeholder:text-white/30 w-40"
-            placeholder="Filtrar..."
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-          />
-          <button
-            onClick={() => setShowAdd(true)}
-            className="poke-btn bg-blue-800 hover:bg-blue-700 text-white text-sm px-4 py-2"
-          >
-            + Guardar en PC
+          {pc.length > 0 && (
+            <button onClick={handleExportShowdown}
+              className="poke-btn bg-purple-900 hover:bg-purple-800 text-white text-xs px-3 py-2">
+              Showdown
+            </button>
+          )}
+          <button onClick={() => setShowAdd(true)}
+            className="poke-btn bg-blue-800 hover:bg-blue-700 text-white text-sm px-4 py-2">
+            + Agregar a PC
           </button>
         </div>
       </div>
+
+      {/* Buscador */}
+      {pc.length > 0 && (
+        <input
+          className="w-full bg-black/30 text-white rounded-lg px-3 py-2 border border-white/10 outline-none placeholder:text-white/30 text-sm"
+          placeholder="🔍 Buscar en la PC..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      )}
 
       {/* Grid */}
       {filtered.length === 0 ? (
         <div className="text-center text-white/30 py-16">
           <div className="text-5xl mb-3">💾</div>
-          <p>{pc.length === 0 ? 'La PC está vacía' : 'No hay resultados'}</p>
+          <p>{pc.length === 0 ? 'La PC está vacía' : 'Sin resultados'}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           {filtered.map(pokemon => (
             <PCCard
               key={pokemon.id}
               pokemon={pokemon}
-              canAddToTeam={team.length < 6}
+              isEditing={editingId === pokemon.id}
+              editNick={editNick}
+              editLevel={editLevel}
+              editAbility={editAbility}
+              editStats={editStats}
+              onEditNick={setEditNick}
+              onEditLevel={setEditLevel}
+              onEditAbility={setEditAbility}
+              onEditStats={setEditStats}
+              onStartEdit={() => handleStartEdit(pokemon)}
+              onSaveEdit={handleSaveEdit}
+              onCancelEdit={() => setEditingId(null)}
+              onEvolve={() => handleEvolve(pokemon)}
               onMoveToTeam={() => handleMoveToTeam(pokemon.id)}
-              onRemove={() => { removeFromPC(pokemon.id); toast('🗑 Pokémon eliminado'); }}
+              onRemove={() => { removeFromPC(pokemon.id); toast('Pokémon eliminado'); }}
               onSendToCemetery={() => { setSelectedId(pokemon.id); setShowDeath(true); }}
+              onToggleShiny={() => updatePokemon(pokemon.id, { isShiny: !pokemon.isShiny })}
+              onOpenDetail={() => setDetailPokemon(pokemon)}
             />
           ))}
         </div>
       )}
 
-      {/* Modal — Agregar a PC */}
+      {/* Modal Agregar */}
       {showAdd && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-gray-900 border border-white/20 rounded-2xl p-6 w-full max-w-sm shadow-2xl my-4">
-            <h3 className="text-white font-bold text-lg mb-4">💾 Guardar en PC</h3>
+            <h3 className="text-white font-bold text-lg mb-4">➕ Agregar a PC</h3>
             <div className="space-y-3">
-
               <div>
                 <label className="text-white/50 text-xs block mb-1">Nombre o N.º Pokédex *</label>
                 <PokemonAutocomplete
-                  value={search}
-                  onChange={setSearch}
+                  value={searchQuery}
+                  onChange={setSearchQuery}
                   onSelect={handlePokemonSelect}
-                  placeholder="ej: eevee / 133"
+                  placeholder="ej: pikachu / 25"
                 />
               </div>
-
               <div>
                 <label className="text-white/50 text-xs block mb-1">Mote</label>
                 <input
@@ -161,22 +283,19 @@ export default function PCBox() {
                   onChange={e => setNickname(e.target.value)}
                 />
               </div>
-
               <div>
                 <label className="text-white/50 text-xs block mb-1">Ruta de captura</label>
                 <input
                   className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-white/10 outline-none placeholder:text-white/30 text-sm"
-                  placeholder="ej: Ruta 3"
+                  placeholder="ej: Ruta 1"
                   value={route}
                   onChange={e => setRoute(e.target.value)}
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-white/50 text-xs block mb-1">Nivel</label>
-                  <input
-                    type="number" min={1} max={100}
+                  <input type="number" min={1} max={100}
                     className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-white/10 outline-none text-sm"
                     value={level}
                     onChange={e => setLevel(Number(e.target.value))}
@@ -188,12 +307,10 @@ export default function PCBox() {
                     value={ability}
                     onChange={setAbility}
                     options={pokemonAbilities}
-                    placeholder="Selecciona habilidad..."
+                    placeholder="Habilidad..."
                   />
                 </div>
               </div>
-
-              {/* Stats editables */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-white/50 text-xs">Stats del juego</label>
@@ -203,20 +320,23 @@ export default function PCBox() {
                       useCustomStats
                         ? 'bg-blue-900/40 border-blue-600/40 text-blue-300'
                         : 'bg-black/30 border-white/10 text-white/40 hover:text-white/70'
-                    }`}
-                  >
-                    {useCustomStats ? '✏️ Editando' : '📊 Editar stats'}
+                    }`}>
+                    {useCustomStats ? 'Editando' : 'Editar stats'}
                   </button>
                 </div>
                 {useCustomStats ? (
                   <div className="bg-black/20 rounded-xl p-3 border border-white/10">
-                    <StatsEditor stats={customStats} onChange={setCustomStats} />
+                    <StatsEditor
+                      stats={customStats}
+                      onChange={(newStats) => { setCustomStats(newStats); }}
+                      level={level}
+                    />
                   </div>
                 ) : loadedStats ? (
                   <div className="bg-black/20 rounded-xl p-3 border border-white/10">
-                    <StatsEditor stats={loadedStats} onChange={() => {}} compact />
+                    <StatsEditor stats={loadedStats} onChange={() => {}} compact level={level} />
                     <p className="text-white/30 text-xs mt-2 text-center">
-                      Stats base — activa "Editar stats" para personalizar
+                      Stats al nivel {level} — activa "Editar stats" para modificar
                     </p>
                   </div>
                 ) : (
@@ -225,20 +345,15 @@ export default function PCBox() {
                   </p>
                 )}
               </div>
-
             </div>
             <div className="flex gap-2 mt-4">
-              <button
-                onClick={handleAdd}
-                disabled={loading}
-                className="flex-1 py-2.5 rounded-xl bg-blue-800 hover:bg-blue-700 text-white font-bold transition-colors disabled:opacity-50"
-              >
-                {loading ? '⏳ Buscando...' : '✓ Guardar'}
+              <button onClick={handleAdd} disabled={loading}
+                className="flex-1 py-2.5 rounded-xl bg-blue-800 hover:bg-blue-700 text-white font-bold transition-colors disabled:opacity-50">
+                {loading ? 'Buscando...' : '✓ Agregar'}
               </button>
               <button
-                onClick={resetForm}
-                className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
-              >
+                onClick={() => { setShowAdd(false); setSearchQuery(''); setLoadedStats(null); setUseCustomStats(false); setPokemonAbilities([]); }}
+                className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 transition-colors">
                 Cancelar
               </button>
             </div>
@@ -246,7 +361,7 @@ export default function PCBox() {
         </div>
       )}
 
-      {/* Modal — Muerte */}
+      {/* Modal Muerte */}
       {showDeath && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 border border-red-900/40 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
@@ -255,92 +370,202 @@ export default function PCBox() {
               {pc.find(p => p.id === selectedId)?.nickname}
             </p>
             <div className="space-y-3">
-              <div>
-                <label className="text-white/50 text-xs block mb-1">Causa de muerte *</label>
-                <input
-                  className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-red-900/30 outline-none placeholder:text-white/30"
-                  placeholder="ej: Ataque sorpresa"
-                  value={deathForm.cause}
-                  onChange={e => setDeathForm(f => ({ ...f, cause: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="text-white/50 text-xs block mb-1">Responsable</label>
-                <input
-                  className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-red-900/30 outline-none placeholder:text-white/30"
-                  placeholder="ej: Entrenador rival"
-                  value={deathForm.killedBy}
-                  onChange={e => setDeathForm(f => ({ ...f, killedBy: e.target.value }))}
-                />
-              </div>
+              <input
+                className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-red-900/30 outline-none placeholder:text-white/30"
+                placeholder="Causa de muerte *"
+                value={deathForm.cause}
+                onChange={e => setDeathForm(f => ({ ...f, cause: e.target.value }))}
+              />
+              <input
+                className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-red-900/30 outline-none placeholder:text-white/30"
+                placeholder="Responsable"
+                value={deathForm.killedBy}
+                onChange={e => setDeathForm(f => ({ ...f, killedBy: e.target.value }))}
+              />
             </div>
             <div className="flex gap-2 mt-4">
-              <button
-                onClick={handleSendToCemetery}
-                className="flex-1 py-2.5 rounded-xl bg-red-900 hover:bg-red-800 text-white font-bold transition-colors"
-              >
+              <button onClick={handleSendToCemetery}
+                className="flex-1 py-2.5 rounded-xl bg-red-900 hover:bg-red-800 text-white font-bold transition-colors">
                 🪦 Confirmar
               </button>
-              <button
-                onClick={() => { setShowDeath(false); setSelectedId(null); }}
-                className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 transition-colors"
-              >
+              <button onClick={() => { setShowDeath(false); setSelectedId(null); }}
+                className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 transition-colors">
                 Cancelar
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Modal Detalle */}
+      {detailPokemon && (
+        <PokemonDetailModal
+          pokemon={detailPokemon}
+          onClose={() => setDetailPokemon(null)}
+        />
+      )}
     </div>
   );
 }
 
-// ── PC Card ──
+// ── PC Card ──────────────────────────────────────────────────
 interface PCCardProps {
   pokemon: TeamPokemon;
-  canAddToTeam: boolean;
+  isEditing: boolean;
+  editNick: string;
+  editLevel: number;
+  editAbility: string;
+  editStats: BaseStat;
+  onEditNick: (v: string) => void;
+  onEditLevel: (v: number) => void;
+  onEditAbility: (v: string) => void;
+  onEditStats: (s: BaseStat) => void;
+  onStartEdit: () => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onEvolve: () => void;
   onMoveToTeam: () => void;
   onRemove: () => void;
   onSendToCemetery: () => void;
+  onToggleShiny: () => void;
+  onOpenDetail: () => void;
 }
 
-function PCCard({ pokemon, canAddToTeam, onMoveToTeam, onRemove, onSendToCemetery }: PCCardProps) {
+function PCCard({
+  pokemon, isEditing,
+  editNick, editLevel, editAbility, editStats,
+  onEditNick, onEditLevel, onEditAbility, onEditStats,
+  onStartEdit, onSaveEdit, onCancelEdit, onEvolve,
+  onMoveToTeam, onRemove, onSendToCemetery, onToggleShiny, onOpenDetail,
+}: PCCardProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const actualStats = useMemo(() => calculateActualStats(pokemon.stats, pokemon.level), [pokemon.stats, pokemon.level]);
+  const totalStats = Object.values(actualStats).reduce((a, b) => a + b, 0);
+
   return (
-    <div className="pokemon-slot occupied p-3 flex flex-col items-center gap-2 relative">
-      <button
-        onClick={() => setShowMenu(!showMenu)}
-        className="absolute top-2 right-2 text-white/30 hover:text-white transition-colors z-10"
-      >⋮</button>
+    <div className="pokemon-slot occupied p-3 flex flex-col gap-2 relative">
+      <button onClick={() => setShowMenu(!showMenu)}
+        className="absolute top-2 right-2 text-white/30 hover:text-white transition-colors text-lg z-10">
+        ⋮
+      </button>
+
       {showMenu && (
-        <div className="absolute top-8 right-2 z-20 bg-gray-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden min-w-36">
-          <button onClick={() => { onMoveToTeam(); setShowMenu(false); }} disabled={!canAddToTeam} className="w-full text-left px-4 py-2 text-white/80 hover:bg-white/10 text-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed">⚔️ Al equipo</button>
-          <button onClick={() => { onSendToCemetery(); setShowMenu(false); }} className="w-full text-left px-4 py-2 text-red-400 hover:bg-red-900/30 text-sm transition-colors">🪦 Cementerio</button>
-          <button onClick={() => { onRemove(); setShowMenu(false); }} className="w-full text-left px-4 py-2 text-white/40 hover:bg-white/5 text-sm transition-colors">🗑 Eliminar</button>
+        <div className="absolute top-8 right-2 z-20 bg-gray-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden min-w-40">
+          <button onClick={() => { onStartEdit(); setShowMenu(false); }}
+            className="w-full text-left px-4 py-2 text-white/80 hover:bg-white/10 text-sm transition-colors">
+            ✏️ Editar
+          </button>
+          <button onClick={() => { onEvolve(); setShowMenu(false); }}
+            className="w-full text-left px-4 py-2 text-blue-400 hover:bg-blue-900/30 text-sm transition-colors">
+            🔄 Evolucionar
+          </button>
+          <button onClick={() => { onOpenDetail(); setShowMenu(false); }}
+            className="w-full text-left px-4 py-2 text-white/80 hover:bg-white/10 text-sm transition-colors">
+            🔍 Ver detalle
+          </button>
+          <button onClick={() => { onToggleShiny(); setShowMenu(false); }}
+            className="w-full text-left px-4 py-2 text-yellow-400 hover:bg-yellow-900/20 text-sm transition-colors">
+            ✨ {pokemon.isShiny ? 'Normal' : 'Shiny'}
+          </button>
+          <button onClick={() => { onMoveToTeam(); setShowMenu(false); }}
+            className="w-full text-left px-4 py-2 text-green-400 hover:bg-green-900/30 text-sm transition-colors">
+            ⚔️ Al equipo
+          </button>
+          <button onClick={() => { onSendToCemetery(); setShowMenu(false); }}
+            className="w-full text-left px-4 py-2 text-red-400 hover:bg-red-900/30 text-sm transition-colors">
+            🪦 Cementerio
+          </button>
+          <button onClick={() => { onRemove(); setShowMenu(false); }}
+            className="w-full text-left px-4 py-2 text-white/30 hover:bg-white/5 text-sm transition-colors">
+            🗑️ Eliminar
+          </button>
         </div>
       )}
-      <img
-        src={pokemon.isShiny ? pokemon.spriteShiny : pokemon.sprite}
-        alt={pokemon.name}
-        className="w-16 h-16 object-contain drop-shadow-lg"
-      />
-      {pokemon.isShiny && <span className="absolute top-2 left-2 text-sm">✨</span>}
-      <div className="text-center w-full">
-        <div className="text-white font-bold text-sm truncate">{pokemon.nickname}</div>
-        <div className="text-white/40 text-xs capitalize">{pokemon.name}</div>
-        <div className="text-white/30 text-xs">Lv.{pokemon.level}</div>
+
+      {/* Sprite */}
+      <div className="flex justify-center relative">
+        <div className="w-20 h-20 flex items-center justify-center">
+          <img
+            src={pokemon.isShiny ? pokemon.spriteShiny : pokemon.sprite}
+            alt={pokemon.name}
+            className="w-full h-full object-contain drop-shadow-lg"
+          />
+        </div>
+        {pokemon.isShiny && <span className="absolute top-0 right-4 text-sm">✨</span>}
+        <span className="absolute bottom-0 right-4 bg-black/50 text-white/70 text-xs px-1.5 rounded-full">
+          Lv.{pokemon.level}
+        </span>
       </div>
-      <div className="flex gap-1 flex-wrap justify-center">
-        {pokemon.types.map(t => (
-          <span key={t} className="type-badge text-white text-xs px-1.5 py-0.5"
-            style={{ background: TYPE_COLORS[t as PokemonType] }}>
-            {t}
-          </span>
-        ))}
-      </div>
-      <div className="text-white/30 text-xs truncate w-full text-center">
-        📍 {pokemon.caughtAt || '—'}
-      </div>
+
+      {isEditing ? (
+        <div className="space-y-1.5">
+          <input
+            className="w-full bg-black/40 text-white text-sm rounded px-2 py-1 border border-white/20 outline-none"
+            value={editNick} onChange={e => onEditNick(e.target.value)} placeholder="Mote"
+          />
+          <input type="number" min={1} max={100}
+            className="w-full bg-black/40 text-white text-sm rounded px-2 py-1 border border-white/20 outline-none"
+            value={editLevel} onChange={e => onEditLevel(Number(e.target.value))}
+          />
+          <AbilityAutocomplete
+            value={editAbility}
+            onChange={onEditAbility}
+            placeholder="Habilidad..."
+          />
+          <div className="bg-black/20 rounded-lg p-2 border border-white/10">
+            <p className="text-white/30 text-xs mb-1.5">Stats base</p>
+            <StatsEditor stats={editStats} onChange={onEditStats} level={editLevel} />
+          </div>
+          <div className="flex gap-1">
+            <button onClick={onSaveEdit}
+              className="flex-1 py-1 rounded bg-green-800 hover:bg-green-700 text-white text-xs font-bold">
+              ✓ Guardar
+            </button>
+            <button onClick={onCancelEdit}
+              className="flex-1 py-1 rounded bg-white/10 hover:bg-white/20 text-white/60 text-xs">
+              ✗ Cancelar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="text-center">
+            <div className="text-white font-bold text-sm truncate">{pokemon.nickname}</div>
+            <div className="text-white/40 text-xs capitalize">{pokemon.name}</div>
+          </div>
+          <div className="flex gap-1 justify-center flex-wrap">
+            {pokemon.types.map(t => (
+              <span key={t} className="type-badge text-white text-xs px-2 py-0.5"
+                style={{ background: TYPE_COLORS[t as PokemonType] }}>{t}</span>
+            ))}
+          </div>
+          <div className="text-white/40 text-xs text-center truncate capitalize">
+            {pokemon.ability}
+          </div>
+          <div className="space-y-0.5">
+            {Object.entries(actualStats).map(([key, val]) => (
+              <div key={key} className="flex items-center gap-1">
+                <span className="text-white/30 text-xs w-8 uppercase">{key}</span>
+                <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.min((val / 255) * 100, 100)}%`,
+                      background: val >= 100 ? '#4ade80' : val >= 70 ? '#facc15' : '#f87171'
+                    }}
+                  />
+                </div>
+                <span className="text-white/50 text-xs w-7 text-right">{val}</span>
+              </div>
+            ))}
+          </div>
+          <div className="text-center text-white/30 text-xs">
+            Total: <span className="text-white/60 font-bold">{totalStats}</span>
+          </div>
+          <div className="text-white/30 text-xs text-center truncate">
+            📍 {pokemon.caughtAt || 'Ruta desconocida'}
+          </div>
+        </>
+      )}
     </div>
   );
 }
