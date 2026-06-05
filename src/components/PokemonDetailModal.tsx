@@ -139,16 +139,16 @@ const handleSave = () => {
             <div>
               <div className="text-white font-bold text-lg">{pokemon.nickname}</div>
               <div className="flex items-center gap-1 text-white/40 text-sm capitalize">
-  <span>{pokemon.name} · Lv.</span>
-  <input
-    type="number"
-    min="1"
-    max="100"
-    value={level}
-    onChange={e => setLevel(Number(e.target.value) || 1)}
-    className="bg-black/30 text-white text-center rounded px-1 py-0.5 w-12 border border-white/20 outline-none focus:border-white/50"
-  />
-</div>
+                <span>{pokemon.name} · Lv.</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={level}
+                  onChange={e => setLevel(Number(e.target.value) || 1)}
+                  className="bg-black/30 text-white text-center rounded px-1 py-0.5 w-12 border border-white/20 outline-none focus:border-white/50"
+                />
+              </div>
               <div className="flex gap-1 mt-1">
                 {pokemon.types.map(t => (
                   <span key={t} className="text-white text-xs px-2 py-0.5 rounded-full"
@@ -303,7 +303,7 @@ const handleSave = () => {
           {activeSection === 'stats' && (
             <div className="space-y-3">
               {Object.entries(pokemon.stats).map(([key, base]) => {
-                const lv = pokemon.level;
+                const lv = level; // <--- ¡AQUÍ ESTABA LA CORRECCIÓN CLAVE!
                 const iv = 15;
                 const calculated = key === 'hp'
                   ? Math.floor((2 * base + iv) * lv / 100) + lv + 10
