@@ -288,22 +288,35 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
           {/* STATS */}
           {activeSection === 'stats' && (
             <div className="space-y-3">
-              {Object.entries(pokemon.stats).map(([key, val]) => (
-                <div key={key} className="flex items-center gap-3">
-                  <span className="text-white/40 text-xs w-14 uppercase font-bold">{key}</span>
-                  <div className="flex-1 h-3 bg-black/40 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${Math.min((val / 255) * 100, 100)}%`,
-                        background: val >= 120 ? '#4ade80' : val >= 80 ? '#facc15' : val >= 50 ? '#fb923c' : '#f87171'
-                      }}
-                    />
+              {Object.entries(pokemon.stats).map(([key, base]) => {
+                const lv = pokemon.level;
+                const iv = 15;
+                const calculated = key === 'hp'
+                  ? Math.floor((2 * base + iv) * lv / 100) + lv + 10
+                  : Math.floor((Math.floor((2 * base + iv) * lv / 100) + 5));
+                const maxCalc = key === 'hp'
+                  ? Math.floor((2 * 255 + 31) * lv / 100) + lv + 10
+                  : Math.floor((Math.floor((2 * 255 + 31) * lv / 100) + 5) * 1.1);
+                return (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className="text-white/40 text-xs w-14 uppercase font-bold">{key}</span>
+                    <div className="flex-1 h-3 bg-black/40 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${Math.min((calculated / maxCalc) * 100, 100)}%`,
+                          background: calculated >= 200 ? '#4ade80' : calculated >= 120 ? '#facc15' : calculated >= 70 ? '#fb923c' : '#f87171'
+                        }}
+                      />
+                    </div>
+                    <div className="text-right w-16">
+                      <span className="text-white font-bold text-sm">{calculated}</span>
+                      <span className="text-white/30 text-xs ml-1">({base})</span>
+                    </div>
                   </div>
-                  <span className="text-white font-bold text-sm w-8 text-right">{val}</span>
-                </div>
-              ))}
+                );
+              })}
               <div className="border-t border-white/10 pt-2 flex justify-between">
-                <span className="text-white/40 text-sm">Total</span>
+                <span className="text-white/40 text-sm">Total base</span>
                 <span className="text-white font-bold">{totalStats}</span>
               </div>
             </div>
