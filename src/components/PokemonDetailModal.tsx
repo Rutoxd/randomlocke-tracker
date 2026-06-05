@@ -53,6 +53,7 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
   const [moveSugg,      setMoveSugg]      = useState<MoveBasicInfo[][]>([[], [], [], []]);
   const [focusedInput,  setFocusedInput]  = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<'moves' | 'types' | 'stats'>('moves');
+  const [level, setLevel] = useState<number>(pokemon.level || 1);
 
   // Inicializar la caché de movimientos al abrir el modal
   useEffect(() => {
@@ -115,8 +116,8 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
     setMoveInputs(inputs);
   };
 
-  const handleSave = () => {
-    updatePokemon(pokemon.id, { moves, heldItem: heldItem || undefined });
+const handleSave = () => {
+    updatePokemon(pokemon.id, { moves, heldItem: heldItem || undefined, level });
     toast.success('Pokemon actualizado');
     onClose();
   };
@@ -137,7 +138,17 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
             />
             <div>
               <div className="text-white font-bold text-lg">{pokemon.nickname}</div>
-              <div className="text-white/40 text-sm capitalize">{pokemon.name} · Lv.{pokemon.level}</div>
+              <div className="flex items-center gap-1 text-white/40 text-sm capitalize">
+  <span>{pokemon.name} · Lv.</span>
+  <input
+    type="number"
+    min="1"
+    max="100"
+    value={level}
+    onChange={e => setLevel(Number(e.target.value) || 1)}
+    className="bg-black/30 text-white text-center rounded px-1 py-0.5 w-12 border border-white/20 outline-none focus:border-white/50"
+  />
+</div>
               <div className="flex gap-1 mt-1">
                 {pokemon.types.map(t => (
                   <span key={t} className="text-white text-xs px-2 py-0.5 rounded-full"
