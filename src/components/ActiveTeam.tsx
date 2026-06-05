@@ -1,5 +1,5 @@
 // src/components/ActiveTeam.tsx
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { usePokeAPI } from '../hooks/usePokeAPI';
 import { TYPE_COLORS } from '../utils/typeMatchups';
@@ -14,6 +14,27 @@ import PokemonDetailModal from './PokemonDetailModal';
 const EMPTY_SLOTS = [0, 1, 2, 3, 4, 5];
 const DEFAULT_STATS: BaseStat = { hp: 45, attack: 45, defense: 45, spAtk: 45, spDef: 45, speed: 45 };
 
+// Función auxiliar para calcular las stats reales en base al nivel y las stats base
+// Función auxiliar para calcular las stats reales en base al nivel y las stats base
+function calculateActualStats(baseStats: BaseStat, level: number): BaseStat {
+  const iv = 15; // Usando el mismo IV por defecto que en el modal de detalles
+  const actualStats: Partial<BaseStat> = {};
+  
+  for (const key in baseStats) {
+    // Le afirmamos a TypeScript que 'key' es una llave válida de BaseStat
+    const statKey = key as keyof BaseStat; 
+    const base = baseStats[statKey];
+
+    if (statKey === 'hp') {
+      actualStats[statKey] = Math.floor((2 * base + iv) * level / 100) + level + 10;
+    } else {
+      actualStats[statKey] = Math.floor((Math.floor((2 * base + iv) * level / 100) + 5));
+    }
+  }
+  
+  return actualStats as BaseStat;
+}
+
 export default function ActiveTeam() {
   const team           = useGameStore(s => s.team);
   const addToTeam      = useGameStore(s => s.addToTeam);
@@ -24,22 +45,22 @@ export default function ActiveTeam() {
   const { searchPokemon, buildTeamPokemon, loading } = usePokeAPI();
   const { play } = useSound();
 
-  const [showAdd,       setShowAdd]       = useState(false);
-  const [showDeath,     setShowDeath]     = useState(false);
-  const [selectedId,    setSelectedId]    = useState<string | null>(null);
-  const [editingId,     setEditingId]     = useState<string | null>(null);
-  const [deathForm,     setDeathForm]     = useState({ cause: '', killedBy: '' });
+  const [showAdd,         setShowAdd]       = useState(false);
+  const [showDeath,       setShowDeath]     = useState(false);
+  const [selectedId,      setSelectedId]    = useState<string | null>(null);
+  const [editingId,       setEditingId]     = useState<string | null>(null);
+  const [deathForm,       setDeathForm]     = useState({ cause: '', killedBy: '' });
   const [detailPokemon, setDetailPokemon] = useState<TeamPokemon | null>(null);
 
-  const [searchQuery,      setSearchQuery]      = useState('');
-  const [nickname,         setNickname]         = useState('');
-  const [route,            setRoute]            = useState('');
-  const [level,            setLevel]            = useState(5);
-  const [ability,          setAbility]          = useState('');
+  const [searchQuery,       setSearchQuery]       = useState('');
+  const [nickname,          setNickname]          = useState('');
+  const [route,             setRoute]             = useState('');
+  const [level,             setLevel]             = useState(5);
+  const [ability,           setAbility]           = useState('');
   const [pokemonAbilities, setPokemonAbilities] = useState<string[]>([]);
-  const [customStats,      setCustomStats]      = useState<BaseStat>(DEFAULT_STATS);
+  const [customStats,       setCustomStats]       = useState<BaseStat>(DEFAULT_STATS);
   const [useCustomStats,   setUseCustomStats]   = useState(false);
-  const [loadedStats,      setLoadedStats]      = useState<BaseStat | null>(null);
+  const [loadedStats,       setLoadedStats]       = useState<BaseStat | null>(null);
 
   const [editNick,    setEditNick]    = useState('');
   const [editLevel,   setEditLevel]   = useState(5);
@@ -114,6 +135,13 @@ export default function ActiveTeam() {
     navigator.clipboard.writeText(text);
     toast.success('Copiado en formato Showdown!');
   };
+
+  // Calcular stats dinámicas para el formulario de Agregar usando useMemo para optimizar
+  const dynamicStatsToAdd = useMemo(() => {
+    const baseToUse = useCustomStats ? customStats : (loadedStats || DEFAULT_STATS);
+    return calculateActualStats(baseToUse, level);
+  }, [useCustomStats, customStats, loadedStats, level]);
+
 
   return (
     <div className="space-y-4">
@@ -232,16 +260,23 @@ export default function ActiveTeam() {
                     {useCustomStats ? 'Editando' : 'Editar stats'}
                   </button>
                 </div>
-                {useCustomStats ? (
+                {loadedStats || useCustomStats ? (
                   <div className="bg-black/20 rounded-xl p-3 border border-white/10">
-                    <StatsEditor stats={customStats} onChange={setCustomStats} />
-                  </div>
-                ) : loadedStats ? (
-                  <div className="bg-black/20 rounded-xl p-3 border border-white/10">
-                    <StatsEditor stats={loadedStats} onChange={() => {}} compact />
-                    <p className="text-white/30 text-xs mt-2 text-center">
-                      Stats base — activa "Editar stats" para personalizar
-                    </p>
+                    <StatsEditor 
+                      stats={dynamicStatsToAdd} 
+                      onChange={(newStats) => {
+                        // Si el usuario edita, guardamos las stats base modificadas o las reales?
+                        // Por diseño actual, CustomStats reemplaza las base.
+                        setCustomStats(newStats); 
+                        if (!useCustomStats) setUseCustomStats(true);
+                      }} 
+                      compact={!useCustomStats} 
+                    />
+                    {!useCustomStats && (
+                      <p className="text-white/30 text-xs mt-2 text-center">
+                        Stats calculadas a nivel {level} — activa "Editar stats" para personalizar base
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-white/20 text-xs text-center py-2">
@@ -359,7 +394,10 @@ function PokemonCard({
   onMoveToPC, onRemove, onSendToCemetery, onToggleShiny, onOpenDetail,
 }: PokemonCardProps) {
   const [showMenu, setShowMenu] = useState(false);
-  const totalStats = Object.values(pokemon.stats).reduce((a, b) => a + b, 0);
+  
+  // Las cartas también deben mostrar las stats dinámicas, no solo las base
+  const actualStats = useMemo(() => calculateActualStats(pokemon.stats, pokemon.level), [pokemon.stats, pokemon.level]);
+  const totalStats = Object.values(actualStats).reduce((a, b) => a + b, 0);
 
   return (
     <div className="pokemon-slot occupied p-3 flex flex-col gap-2 relative">
@@ -427,7 +465,7 @@ function PokemonCard({
             placeholder="Habilidad..."
           />
           <div className="bg-black/20 rounded-lg p-2 border border-white/10">
-            <p className="text-white/30 text-xs mb-1.5">Stats del juego</p>
+            <p className="text-white/30 text-xs mb-1.5">Stats base</p>
             <StatsEditor stats={editStats} onChange={onEditStats} />
           </div>
           <div className="flex gap-1">
@@ -453,7 +491,7 @@ function PokemonCard({
             {pokemon.ability}
           </div>
           <div className="space-y-0.5">
-            {Object.entries(pokemon.stats).map(([key, val]) => (
+            {Object.entries(actualStats).map(([key, val]) => (
               <div key={key} className="flex items-center gap-1">
                 <span className="text-white/30 text-xs w-8 uppercase">{key}</span>
                 <div className="flex-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
