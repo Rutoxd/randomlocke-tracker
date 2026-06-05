@@ -2,52 +2,9 @@
 import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { TYPE_COLORS, TYPE_LABELS, getDefensiveWeaknesses } from '../utils/typeMatchups';
+import { searchMoves, type MoveEntry } from '../utils/movesData';
 import type { TeamPokemon, MoveInfo, PokemonType } from '../types/pokemon.types';
 import toast from 'react-hot-toast';
-
-interface MoveRaw {
-  name: string;
-  type: { name: string };
-  damage_class: { name: string };
-  power: number | null;
-  accuracy: number | null;
-}
-
-const moveCache = new Map<string, MoveInfo>();
-
-async function fetchMove(name: string): Promise<MoveInfo | null> {
-  if (moveCache.has(name)) return moveCache.get(name)!;
-  try {
-    const res = await fetch(`https://pokeapi.co/api/v2/move/${name}`);
-    if (!res.ok) return null;
-    const data: MoveRaw = await res.json();
-    const move: MoveInfo = {
-      name: data.name,
-      type: data.type.name as PokemonType,
-      category: data.damage_class.name as 'physical' | 'special' | 'status',
-      power: data.power,
-      accuracy: data.accuracy,
-    };
-    moveCache.set(name, move);
-    return move;
-  } catch { return null; }
-}
-
-const COMMON_MOVES = [
-  'tackle','scratch','pound','cut','fly','surf','strength','flash',
-  'thunderbolt','flamethrower','ice-beam','psychic','earthquake','rock-slide',
-  'hyper-beam','solar-beam','thunder','blizzard','fire-blast','swift',
-  'waterfall','dragon-rage','body-slam','skull-bash','take-down','double-edge',
-  'close-combat','flare-blitz','aqua-jet','bullet-punch','mach-punch',
-  'extreme-speed','crunch','outrage','dragon-claw','iron-tail','shadow-ball',
-  'energy-ball','focus-blast','aura-sphere','dark-pulse','sludge-bomb',
-  'stone-edge','stealth-rock','toxic','will-o-wisp','thunder-wave',
-  'protect','substitute','rest','sleep-talk','roost','recover',
-  'swords-dance','nasty-plot','calm-mind','dragon-dance','quiver-dance',
-  'u-turn','volt-switch','flip-turn','scald','knock-off','superpower',
-  'ice-punch','thunder-punch','fire-punch','drain-punch','power-whip',
-  'wood-hammer','brave-bird','gunk-shot','cross-chop','sky-uppercut',
-];
 
 const CATEGORY_ICONS: Record<string, string> = {
   physical: '⚔️',
@@ -68,6 +25,17 @@ const WEAKNESS_CONFIG = [
   { mult: 0,    label: 'x0',  bg: 'bg-gray-900/60',   border: 'border-gray-500/60',   text: 'text-gray-300',   title: 'Inmunidades'       },
 ];
 
+// Converts a MoveEntry from movesData into the MoveInfo shape used by the rest of the app
+function moveEntryToMoveInfo(entry: MoveEntry): MoveInfo {
+  return {
+    name:     entry.nameEn,
+    type:     entry.type as PokemonType,
+    category: entry.category as 'physical' | 'special' | 'status',
+    power:    entry.power ?? null,
+    accuracy: entry.accuracy ?? null,
+  };
+}
+
 interface Props {
   pokemon: TeamPokemon;
   onClose: () => void;
@@ -77,48 +45,59 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
   const updatePokemon = useGameStore(s => s.updatePokemon);
   const bag           = useGameStore(s => s.bag);
 
-  const [moves,          setMoves]          = useState<(MoveInfo | null)[]>(
+  const [moves,         setMoves]         = useState<(MoveInfo | null)[]>(
     pokemon.moves?.length === 4 ? pokemon.moves : [null, null, null, null]
   );
-  const [heldItem,       setHeldItem]       = useState<string>(pokemon.heldItem ?? '');
-  const [moveInputs,     setMoveInputs]     = useState<string[]>(['', '', '', '']);
-  const [moveLoading,    setMoveLoading]    = useState<boolean[]>([false, false, false, false]);
-  const [moveSugg,       setMoveSugg]       = useState<string[][]>([[], [], [], []]);
-  const [focusedInput,   setFocusedInput]   = useState<number | null>(null);
-  const [activeSection,  setActiveSection]  = useState<'moves' | 'types' | 'stats'>('moves');
+  const [heldItem,      setHeldItem]      = useState<string>(pokemon.heldItem ?? '');
+  const [moveInputs,    setMoveInputs]    = useState<string[]>(['', '', '', '']);
+  const [moveSugg,      setMoveSugg]      = useState<MoveEntry[][]>([[], [], [], []]);
+  const [focusedInput,  setFocusedInput]  = useState<number | null>(null);
+  const [activeSection, setActiveSection] = useState<'moves' | 'types' | 'stats'>('moves');
 
   const weaknesses = getDefensiveWeaknesses(pokemon.types as PokemonType[]);
   const byMult = (m: number) =>
     Object.entries(weaknesses).filter(([, v]) => v === m).map(([t]) => t as PokemonType);
 
+  // --- Move search (now fully local, no fetch) ---
   const handleMoveSearch = (index: number, query: string) => {
-    const inputs = [...moveInputs]; inputs[index] = query; setMoveInputs(inputs);
+    const inputs = [...moveInputs];
+    inputs[index] = query;
+    setMoveInputs(inputs);
+
     if (query.length >= 2) {
-      const q = query.toLowerCase();
+      const results = searchMoves(query).slice(0, 6);
       const sugg = [...moveSugg];
-      sugg[index] = COMMON_MOVES.filter(m => m.includes(q)).slice(0, 6);
+      sugg[index] = results;
       setMoveSugg(sugg);
     } else {
-      const sugg = [...moveSugg]; sugg[index] = []; setMoveSugg(sugg);
+      const sugg = [...moveSugg];
+      sugg[index] = [];
+      setMoveSugg(sugg);
     }
   };
 
-  const handleSelectMove = async (index: number, name: string) => {
-    const inputs = [...moveInputs]; inputs[index] = name; setMoveInputs(inputs);
-    const sugg = [...moveSugg]; sugg[index] = []; setMoveSugg(sugg);
-    const loading = [...moveLoading]; loading[index] = true; setMoveLoading([...loading]);
-    const move = await fetchMove(name);
-    loading[index] = false; setMoveLoading([...loading]);
-    if (move) {
-      const newMoves = [...moves]; newMoves[index] = move; setMoves(newMoves);
-    } else {
-      toast.error('Movimiento no encontrado');
-    }
+  const handleSelectMove = (index: number, entry: MoveEntry) => {
+    const inputs = [...moveInputs];
+    inputs[index] = entry.nameEn;
+    setMoveInputs(inputs);
+
+    const sugg = [...moveSugg];
+    sugg[index] = [];
+    setMoveSugg(sugg);
+
+    const newMoves = [...moves];
+    newMoves[index] = moveEntryToMoveInfo(entry);
+    setMoves(newMoves);
   };
 
   const handleClearMove = (index: number) => {
-    const newMoves = [...moves]; newMoves[index] = null; setMoves(newMoves);
-    const inputs = [...moveInputs]; inputs[index] = ''; setMoveInputs(inputs);
+    const newMoves = [...moves];
+    newMoves[index] = null;
+    setMoves(newMoves);
+
+    const inputs = [...moveInputs];
+    inputs[index] = '';
+    setMoveInputs(inputs);
   };
 
   const handleSave = () => {
@@ -203,7 +182,7 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
                             <span className="text-orange-400 text-xs">Potencia: {moves[i]!.power}</span>
                           )}
                           {moves[i]!.accuracy && (
-                            <span className="text-blue-400 text-xs">Precision: {moves[i]!.accuracy}%</span>
+                            <span className="text-blue-400 text-xs">Precisión: {moves[i]!.accuracy}%</span>
                           )}
                         </div>
                       </div>
@@ -217,16 +196,29 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
                           onFocus={() => setFocusedInput(i)}
                           onBlur={() => setTimeout(() => setFocusedInput(null), 200)}
                         />
-                        {moveLoading[i] && (
-                          <span className="absolute right-4 top-4 text-white/40 text-xs">...</span>
-                        )}
                         {focusedInput === i && moveSugg[i].length > 0 && (
                           <div className="absolute left-2 right-2 top-full mt-1 z-[999] bg-gray-800 border border-white/20 rounded-xl shadow-2xl overflow-hidden">
-                            {moveSugg[i].map(name => (
-                              <button key={name}
-                                onMouseDown={e => { e.preventDefault(); handleSelectMove(i, name); }}
-                                className="w-full text-left px-3 py-2 text-white/80 hover:bg-white/10 text-xs capitalize transition-colors">
-                                {name.replace(/-/g, ' ')}
+                            {moveSugg[i].map(entry => (
+                              <button
+                                key={entry.nameEn}
+                                onMouseDown={e => { e.preventDefault(); handleSelectMove(i, entry); }}
+                                className="w-full text-left px-3 py-2 hover:bg-white/10 transition-colors"
+                              >
+                                <span className="text-white/80 text-xs capitalize">
+                                  {entry.nameEn.replace(/-/g, ' ')}
+                                </span>
+                                {entry.nameEs && (
+                                  <span className="text-white/40 text-xs ml-1">· {entry.nameEs}</span>
+                                )}
+                                <span
+                                  className="text-white text-xs px-1.5 py-0.5 rounded-full ml-2"
+                                  style={{ background: TYPE_COLORS[entry.type as PokemonType] }}
+                                >
+                                  {TYPE_LABELS[entry.type as PokemonType] || entry.type}
+                                </span>
+                                {entry.power && (
+                                  <span className="text-orange-400 text-xs ml-1">{entry.power}</span>
+                                )}
                               </button>
                             ))}
                           </div>
@@ -241,7 +233,7 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
               <div className="bg-black/20 rounded-xl p-3 border border-white/10">
                 <div className="text-white/40 text-xs mb-2">Objeto equipado</div>
                 {bag.length === 0 ? (
-                  <p className="text-white/30 text-xs">La mochila esta vacia — agrega objetos primero</p>
+                  <p className="text-white/30 text-xs">La mochila está vacía — agrega objetos primero</p>
                 ) : (
                   <select
                     className="w-full bg-black/40 text-white text-sm rounded-lg px-3 py-2 border border-white/10 outline-none"
