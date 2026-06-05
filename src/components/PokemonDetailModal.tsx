@@ -205,7 +205,7 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
                       <div className="relative p-2">
                         <input
                           className="w-full bg-black/30 text-white text-sm rounded-lg px-3 py-2 border border-white/10 outline-none placeholder:text-white/20"
-                          placeholder={`Movimiento ${i + 1}...`}
+                          placeholder={`Buscar ataque en inglés...`}
                           value={moveInputs[i]}
                           onChange={e => handleMoveSearch(i, e.target.value)}
                           onFocus={() => setFocusedInput(i)}
