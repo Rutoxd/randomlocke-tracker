@@ -1,8 +1,8 @@
 // src/components/PokemonDetailModal.tsx
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { TYPE_COLORS, TYPE_LABELS, getDefensiveWeaknesses } from '../utils/typeMatchups';
-import { searchMoves, type MoveEntry } from '../utils/movesData';
+import { fetchAllMovesList, searchMovesFromAPI, getMoveDetails, type MoveBasicInfo, type MoveDetail } from '../utils/movesApi';
 import type { TeamPokemon, MoveInfo, PokemonType } from '../types/pokemon.types';
 import toast from 'react-hot-toast';
 
@@ -25,8 +25,8 @@ const WEAKNESS_CONFIG = [
   { mult: 0,    label: 'x0',  bg: 'bg-gray-900/60',   border: 'border-gray-500/60',   text: 'text-gray-300',   title: 'Inmunidades'       },
 ];
 
-// Converts a MoveEntry from movesData into the MoveInfo shape used by the rest of the app
-function moveEntryToMoveInfo(entry: MoveEntry): MoveInfo {
+// Convierte un MoveDetail de la API a la estructura MoveInfo que usa tu aplicación
+function moveDetailToMoveInfo(entry: MoveDetail): MoveInfo {
   return {
     name:     entry.nameEn,
     type:     entry.type as PokemonType,
@@ -50,22 +50,27 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
   );
   const [heldItem,      setHeldItem]      = useState<string>(pokemon.heldItem ?? '');
   const [moveInputs,    setMoveInputs]    = useState<string[]>(['', '', '', '']);
-  const [moveSugg,      setMoveSugg]      = useState<MoveEntry[][]>([[], [], [], []]);
+  const [moveSugg,      setMoveSugg]      = useState<MoveBasicInfo[][]>([[], [], [], []]);
   const [focusedInput,  setFocusedInput]  = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<'moves' | 'types' | 'stats'>('moves');
+
+  // Inicializar la caché de movimientos al abrir el modal
+  useEffect(() => {
+    fetchAllMovesList();
+  }, []);
 
   const weaknesses = getDefensiveWeaknesses(pokemon.types as PokemonType[]);
   const byMult = (m: number) =>
     Object.entries(weaknesses).filter(([, v]) => v === m).map(([t]) => t as PokemonType);
 
-  // --- Move search (now fully local, no fetch) ---
+  // Búsqueda usando la lista de la API en caché
   const handleMoveSearch = (index: number, query: string) => {
     const inputs = [...moveInputs];
     inputs[index] = query;
     setMoveInputs(inputs);
 
     if (query.length >= 2) {
-      const results = searchMoves(query).slice(0, 6);
+      const results = searchMovesFromAPI(query).slice(0, 6);
       const sugg = [...moveSugg];
       sugg[index] = results;
       setMoveSugg(sugg);
@@ -76,18 +81,28 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
     }
   };
 
-  const handleSelectMove = (index: number, entry: MoveEntry) => {
-    const inputs = [...moveInputs];
-    inputs[index] = entry.nameEn;
-    setMoveInputs(inputs);
-
+  // Cuando el usuario selecciona un movimiento del desplegable
+  const handleSelectMove = async (index: number, entry: MoveBasicInfo) => {
+    // 1. Cerramos el menú sugerido inmediatamente para dar retroalimentación visual
     const sugg = [...moveSugg];
     sugg[index] = [];
     setMoveSugg(sugg);
 
-    const newMoves = [...moves];
-    newMoves[index] = moveEntryToMoveInfo(entry);
-    setMoves(newMoves);
+    // 2. Mostramos el nombre en el input (podrías poner "Cargando..." si quisieras)
+    const inputs = [...moveInputs];
+    inputs[index] = entry.name;
+    setMoveInputs(inputs);
+
+    // 3. Hacemos el fetch de los detalles profundos
+    const details = await getMoveDetails(entry.url);
+    
+    if (details) {
+      const newMoves = [...moves];
+      newMoves[index] = moveDetailToMoveInfo(details);
+      setMoves(newMoves);
+    } else {
+      toast.error('Error al obtener los detalles del movimiento');
+    }
   };
 
   const handleClearMove = (index: number) => {
@@ -200,25 +215,13 @@ export default function PokemonDetailModal({ pokemon, onClose }: Props) {
                           <div className="absolute left-2 right-2 top-full mt-1 z-[999] bg-gray-800 border border-white/20 rounded-xl shadow-2xl overflow-hidden">
                             {moveSugg[i].map(entry => (
                               <button
-                                key={entry.nameEn}
+                                key={entry.name}
                                 onMouseDown={e => { e.preventDefault(); handleSelectMove(i, entry); }}
-                                className="w-full text-left px-3 py-2 hover:bg-white/10 transition-colors"
+                                className="w-full text-left px-3 py-2 hover:bg-white/10 transition-colors flex items-center justify-between"
                               >
                                 <span className="text-white/80 text-xs capitalize">
-                                  {entry.nameEn.replace(/-/g, ' ')}
+                                  {entry.name.replace(/-/g, ' ')}
                                 </span>
-                                {entry.nameEs && (
-                                  <span className="text-white/40 text-xs ml-1">· {entry.nameEs}</span>
-                                )}
-                                <span
-                                  className="text-white text-xs px-1.5 py-0.5 rounded-full ml-2"
-                                  style={{ background: TYPE_COLORS[entry.type as PokemonType] }}
-                                >
-                                  {TYPE_LABELS[entry.type as PokemonType] || entry.type}
-                                </span>
-                                {entry.power && (
-                                  <span className="text-orange-400 text-xs ml-1">{entry.power}</span>
-                                )}
                               </button>
                             ))}
                           </div>
