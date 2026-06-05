@@ -1,0 +1,107 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --theme-primary:   #CC0000;
+    --theme-secondary: #8B0000;
+    --theme-accent:    #ff6b6b;
+    --theme-hinge:     #555;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: #1a1a2e;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: var(--theme-primary); border-radius: 3px; }
+}
+
+@layer components {
+  /* Carcasa Pokédex */
+  .pokedex-shell {
+    background: linear-gradient(145deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);
+    border-radius: 16px 16px 8px 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15);
+    position: relative;
+  }
+
+  /* Pantalla tipo LCD */
+  .pokedex-screen {
+    background: #0d1117;
+    border: 3px solid #333;
+    border-radius: 8px;
+    box-shadow: inset 0 2px 12px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  /* LED animado */
+  .led {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    box-shadow: 0 0 6px currentColor, 0 0 12px currentColor;
+  }
+  .led-red    { color: #ff4444; background: #ff4444; }
+  .led-yellow { color: #ffcc00; background: #ffcc00; }
+  .led-green  { color: #44ff88; background: #44ff88; animation: pulse 2s ease-in-out infinite; }
+  .led-blue   { color: #4488ff; background: #4488ff; }
+
+  /* Botón Pokédex */
+  .poke-btn {
+    @apply px-4 py-2 rounded-lg font-bold text-sm transition-all duration-150 active:scale-95 select-none cursor-pointer;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.3);
+  }
+  .poke-btn:active { box-shadow: 0 1px 0 rgba(0,0,0,0.3); transform: translateY(2px) scale(0.98); }
+
+  /* Card de Pokémon */
+  .pokemon-slot {
+    @apply relative rounded-xl border-2 transition-all duration-200 cursor-pointer select-none;
+    @apply hover:scale-105 hover:shadow-lg;
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.1);
+  }
+  .pokemon-slot.occupied { border-color: rgba(255,255,255,0.25); }
+  .pokemon-slot.empty    { border-style: dashed; opacity: 0.4; }
+
+  /* Badge de tipo */
+  .type-badge {
+    @apply px-2 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide;
+  }
+}
+
+/* Temas de color */
+.theme-red    { --theme-primary: #CC0000; --theme-secondary: #8B0000; --theme-accent: #ff6b6b; }
+.theme-blue   { --theme-primary: #1a6bcc; --theme-secondary: #0d4a99; --theme-accent: #6ba3ff; }
+.theme-green  { --theme-primary: #2d8a4e; --theme-secondary: #1a5c33; --theme-accent: #5dcc8a; }
+.theme-gold   { --theme-primary: #c9a900; --theme-secondary: #8f7600; --theme-accent: #ffd700; }
+.theme-silver { --theme-primary: #6a7fa0; --theme-secondary: #4a5c78; --theme-accent: #a8bcd4; }
+.theme-black  { --theme-primary: #2a2a3e; --theme-secondary: #1a1a2e; --theme-accent: #8888ff; }
+
+/* Colores por tipo Pokémon */
+.type-fire     { background: #F08030; color: #fff; }
+.type-water    { background: #6890F0; color: #fff; }
+.type-grass    { background: #78C850; color: #fff; }
+.type-electric { background: #F8D030; color: #333; }
+.type-psychic  { background: #F85888; color: #fff; }
+.type-ice      { background: #98D8D8; color: #333; }
+.type-dragon   { background: #7038F8; color: #fff; }
+.type-dark     { background: #705848; color: #fff; }
+.type-fairy    { background: #EE99AC; color: #333; }
+.type-normal   { background: #A8A878; color: #fff; }
+.type-fighting { background: #C03028; color: #fff; }
+.type-flying   { background: #A890F0; color: #fff; }
+.type-poison   { background: #A040A0; color: #fff; }
+.type-ground   { background: #E0C068; color: #333; }
+.type-rock     { background: #B8A038; color: #fff; }
+.type-bug      { background: #A8B820; color: #fff; }
+.type-ghost    { background: #705898; color: #fff; }
+.type-steel    { background: #B8B8D0; color: #333; }
+.type-unknown  { background: #68A090; color: #fff; }
