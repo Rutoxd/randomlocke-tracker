@@ -14,14 +14,12 @@ import PokemonDetailModal from './PokemonDetailModal';
 const EMPTY_SLOTS = [0, 1, 2, 3, 4, 5];
 const DEFAULT_STATS: BaseStat = { hp: 45, attack: 45, defense: 45, spAtk: 45, spDef: 45, speed: 45 };
 
-// Función auxiliar para calcular las stats reales en base al nivel y las stats base
-// Función auxiliar para calcular las stats reales en base al nivel y las stats base
+// Función auxiliar mantenida para la vista de la tarjeta de los Pokémon en el equipo
 function calculateActualStats(baseStats: BaseStat, level: number): BaseStat {
-  const iv = 15; // Usando el mismo IV por defecto que en el modal de detalles
+  const iv = 15;
   const actualStats: Partial<BaseStat> = {};
   
   for (const key in baseStats) {
-    // Le afirmamos a TypeScript que 'key' es una llave válida de BaseStat
     const statKey = key as keyof BaseStat; 
     const base = baseStats[statKey];
 
@@ -91,7 +89,7 @@ export default function ActiveTeam() {
       stats: useCustomStats ? customStats : result.stats,
     });
     play('catch');
-    toast.success(`${nickname || result.name} anadido al equipo!`);
+    toast.success(`${nickname || result.name} añadido al equipo!`);
     setShowAdd(false);
     setSearchQuery(''); setNickname(''); setRoute(''); setLevel(5);
     setAbility(''); setPokemonAbilities([]); setCustomStats(DEFAULT_STATS);
@@ -135,13 +133,6 @@ export default function ActiveTeam() {
     navigator.clipboard.writeText(text);
     toast.success('Copiado en formato Showdown!');
   };
-
-  // Calcular stats dinámicas para el formulario de Agregar usando useMemo para optimizar
-  const dynamicStatsToAdd = useMemo(() => {
-    const baseToUse = useCustomStats ? customStats : (loadedStats || DEFAULT_STATS);
-    return calculateActualStats(baseToUse, level);
-  }, [useCustomStats, customStats, loadedStats, level]);
-
 
   return (
     <div className="space-y-4">
@@ -260,23 +251,28 @@ export default function ActiveTeam() {
                     {useCustomStats ? 'Editando' : 'Editar stats'}
                   </button>
                 </div>
-                {loadedStats || useCustomStats ? (
+                {useCustomStats ? (
                   <div className="bg-black/20 rounded-xl p-3 border border-white/10">
                     <StatsEditor 
-                      stats={dynamicStatsToAdd} 
+                      stats={customStats} 
                       onChange={(newStats) => {
-                        // Si el usuario edita, guardamos las stats base modificadas o las reales?
-                        // Por diseño actual, CustomStats reemplaza las base.
                         setCustomStats(newStats); 
                         if (!useCustomStats) setUseCustomStats(true);
                       }} 
-                      compact={!useCustomStats} 
+                      level={level} 
                     />
-                    {!useCustomStats && (
-                      <p className="text-white/30 text-xs mt-2 text-center">
-                        Stats calculadas a nivel {level} — activa "Editar stats" para personalizar base
-                      </p>
-                    )}
+                  </div>
+                ) : loadedStats ? (
+                  <div className="bg-black/20 rounded-xl p-3 border border-white/10">
+                    <StatsEditor 
+                      stats={loadedStats} 
+                      onChange={() => {}} 
+                      compact 
+                      level={level} 
+                    />
+                    <p className="text-white/30 text-xs mt-2 text-center">
+                      Stats estimadas al nivel {level} — activa "Editar stats" para modificar la base
+                    </p>
                   </div>
                 ) : (
                   <p className="text-white/20 text-xs text-center py-2">
@@ -395,7 +391,7 @@ function PokemonCard({
 }: PokemonCardProps) {
   const [showMenu, setShowMenu] = useState(false);
   
-  // Las cartas también deben mostrar las stats dinámicas, no solo las base
+  // Se calculan las stats dinámicas basándose en el nivel actual para la tarjeta en modo lectura
   const actualStats = useMemo(() => calculateActualStats(pokemon.stats, pokemon.level), [pokemon.stats, pokemon.level]);
   const totalStats = Object.values(actualStats).reduce((a, b) => a + b, 0);
 
@@ -466,7 +462,7 @@ function PokemonCard({
           />
           <div className="bg-black/20 rounded-lg p-2 border border-white/10">
             <p className="text-white/30 text-xs mb-1.5">Stats base</p>
-            <StatsEditor stats={editStats} onChange={onEditStats} />
+            <StatsEditor stats={editStats} onChange={onEditStats} level={editLevel} />
           </div>
           <div className="flex gap-1">
             <button onClick={onSaveEdit} className="flex-1 py-1 rounded bg-green-800 hover:bg-green-700 text-white text-xs font-bold">Guardar</button>
