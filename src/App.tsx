@@ -27,6 +27,11 @@ export default function App() {
   const prevTabRef = useRef<string>(activeTab);
   const [, setPcSelectedPokemon] = useState<string | null>(null);
 
+  // Forzar dashboard al cargar
+  useEffect(() => {
+    setTab('dashboard');
+  }, [setTab]);
+
   useEffect(() => {
     document.documentElement.className = `theme-${theme} dark`;
   }, [theme]);
