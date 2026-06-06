@@ -1,441 +1,318 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { usePokeAPI } from '../hooks/usePokeAPI';
+import { getLeagueForGame } from '../utils/leagueData';
 import { TYPE_COLORS } from '../utils/typeMatchups';
-import type { BaseStat, PokemonType, TeamPokemon } from '../types/pokemon.types';
+import type { PokemonType } from '../types/pokemon.types';
 import toast from 'react-hot-toast';
-import { useSound } from '../hooks/useSound';
-import PokemonAutocomplete from './PokemonAutocomplete';
-import AbilityAutocomplete from './AbilityAutocomplete';
-import StatsEditor from './StatsEditor';
-import PokemonDetailModal from './PokemonDetailModal';
 
-const DEFAULT_STATS: BaseStat = { hp: 45, attack: 45, defense: 45, spAtk: 45, spDef: 45, speed: 45 };
+export default function Dashboard() {
+  const settings      = useGameStore(s => s.settings);
+  const rules         = useGameStore(s => s.rules);
+  const team          = useGameStore(s => s.team);
+  const cemetery      = useGameStore(s => s.cemetery);
+  const badges        = useGameStore(s => s.badges);
+  const versus        = useGameStore(s => s.versus);
+  const toggleRule    = useGameStore(s => s.toggleRule);
+  const toggleBadge   = useGameStore(s => s.toggleBadge);
+  const setBadges     = useGameStore(s => s.setBadges);
+  const addVersus     = useGameStore(s => s.addVersus);
+  const removeVersus  = useGameStore(s => s.removeVersus);
+  const incrementWipe = useGameStore(s => s.incrementWipe);
 
-interface PCBoxProps {
-  onSelectPokemon?: (pokemon: TeamPokemon | null) => void;
-  selectedPokemonId?: string | null;
-}
+  const league = getLeagueForGame(settings.gameVersion);
+  const [showVersusForm, setShowVersusForm] = useState(false);
+  const [showRules,      setShowRules]      = useState(false);
+  const [versusForm, setVersusForm] = useState({ opponent: '', result: 'win' as 'win'|'loss'|'draw', notes: '' });
 
-export default function PCBox({ onSelectPokemon, selectedPokemonId }: PCBoxProps) {
-  const pc             = useGameStore(s => s.pc);
-  const team           = useGameStore(s => s.team);
-  const addToPC        = useGameStore(s => s.addToPC);
-  const moveToTeam     = useGameStore(s => s.moveToTeam);
-  const removeFromPC   = useGameStore(s => s.removeFromPC);
-  const sendToCemetery = useGameStore(s => s.sendToCemetery);
-  const updatePokemon  = useGameStore(s => s.updatePokemon);
-  const { searchPokemon, buildTeamPokemon, loading } = usePokeAPI();
-  const { play } = useSound();
-
-  const [search,        setSearch]        = useState('');
-  const [showAdd,       setShowAdd]       = useState(false);
-  const [showDeath,     setShowDeath]     = useState(false);
-  const [selectedId,    setSelectedId]    = useState<string | null>(null);
-  const [editingId,     setEditingId]     = useState<string | null>(null);
-  const [deathForm,     setDeathForm]     = useState({ cause: '', killedBy: '' });
-  const [detailPokemon, setDetailPokemon] = useState<TeamPokemon | null>(null);
-
-  const [searchQuery,      setSearchQuery]      = useState('');
-  const [nickname,         setNickname]         = useState('');
-  const [route,            setRoute]            = useState('');
-  const [level,            setLevel]            = useState(5);
-  const [ability,          setAbility]          = useState('');
-  const [pokemonAbilities, setPokemonAbilities] = useState<string[]>([]);
-  const [customStats,      setCustomStats]      = useState<BaseStat>(DEFAULT_STATS);
-  const [useCustomStats,   setUseCustomStats]   = useState(false);
-  const [loadedStats,      setLoadedStats]      = useState<BaseStat | null>(null);
-
-  const [editNick,    setEditNick]    = useState('');
-  const [editLevel,   setEditLevel]   = useState(5);
-  const [editAbility, setEditAbility] = useState('');
-  const [editStats,   setEditStats]   = useState<BaseStat>(DEFAULT_STATS);
-
-  const filtered = useMemo(() =>
-    pc.filter(p =>
-      p.nickname.toLowerCase().includes(search.toLowerCase()) ||
-      p.name.toLowerCase().includes(search.toLowerCase())
-    ), [pc, search]);
-
-  const handlePokemonSelect = async (name: string) => {
-    const result = await searchPokemon(name);
-    if (result) {
-      setLoadedStats(result.stats);
-      setCustomStats(result.stats);
-      setPokemonAbilities(result.abilities);
-      setAbility(result.abilities[0] ?? '');
-    }
+  const initBadges = () => {
+    if (!league) return;
+    const newBadges = league.gymLeaders.map((gl, i) => ({
+      id: `${settings.gameVersion}-${i}`,
+      name: gl.badge,
+      region: league.region.toLowerCase() as import('../types/game.types').BadgeRegion,
+      obtained: false,
+    }));
+    setBadges(newBadges);
+    toast.success(`Medallas de ${league.region} cargadas`);
   };
 
-  const handleAdd = async () => {
-    if (!searchQuery.trim()) return;
-    const result = await searchPokemon(searchQuery);
-    if (!result) { toast.error('Pokémon no encontrado'); return; }
-    const pokemon = buildTeamPokemon(result, nickname, route);
-    addToPC({ ...pokemon, level, ability: ability || pokemon.ability, stats: useCustomStats ? customStats : result.stats });
-    play('catch');
-    toast.success(`${nickname || result.name} añadido a la PC!`);
-    setShowAdd(false);
-    setSearchQuery(''); setNickname(''); setRoute(''); setLevel(5);
-    setAbility(''); setPokemonAbilities([]); setCustomStats(DEFAULT_STATS);
-    setUseCustomStats(false); setLoadedStats(null);
-  };
+  const mvp = team.length > 0
+    ? team.reduce((best, p) => {
+        const t = Object.values(p.stats).reduce((a,b) => a+b, 0);
+        const b = Object.values(best.stats).reduce((a,b) => a+b, 0);
+        return t > b ? p : best;
+      })
+    : null;
 
-  const handleStartEdit = (p: TeamPokemon) => {
-    setEditingId(p.id);
-    setEditNick(p.nickname);
-    setEditLevel(p.level);
-    setEditAbility(p.ability);
-    setEditStats(p.stats);
-  };
+  const wins   = versus.filter(v => v.result === 'win').length;
+  const losses = versus.filter(v => v.result === 'loss').length;
+  const draws  = versus.filter(v => v.result === 'draw').length;
 
-  const handleSaveEdit = () => {
-    if (!editingId) return;
-    updatePokemon(editingId, { nickname: editNick, level: editLevel, ability: editAbility, stats: editStats });
-    // Refresh panel if this pokemon is selected
-    const updated = pc.find(p => p.id === editingId);
-    if (updated && selectedPokemonId === editingId) {
-      onSelectPokemon?.({ ...updated, nickname: editNick, level: editLevel, ability: editAbility, stats: editStats });
-    }
-    setEditingId(null);
-    toast.success('Pokémon actualizado');
-  };
-
-  const handleSendToCemetery = () => {
-    if (!selectedId || !deathForm.cause.trim()) return;
-    sendToCemetery(selectedId, deathForm.cause, deathForm.killedBy);
-    if (selectedId === selectedPokemonId) onSelectPokemon?.(null);
-    play('death');
-    toast('💀 Pokémon enviado al cementerio');
-    setShowDeath(false); setSelectedId(null); setDeathForm({ cause: '', killedBy: '' });
-  };
-
-  const handleEvolve = async (pokemon: TeamPokemon) => {
-    const t = toast.loading(`Buscando evolución para ${pokemon.name}...`);
-    try {
-      const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${pokemon.name}`);
-      const species = await res.json();
-      const evoRes = await fetch(species.evolution_chain.url);
-      const evoData = await evoRes.json();
-      const findNext = (chain: { species: { name: string }; evolves_to: typeof chain[] }): string | null => {
-        if (chain.species.name === pokemon.name) return chain.evolves_to[0]?.species.name ?? null;
-        for (const next of chain.evolves_to) { const found = findNext(next); if (found) return found; }
-        return null;
-      };
-      const nextEvo = findNext(evoData.chain);
-      toast.dismiss(t);
-      if (!nextEvo) { toast('Este Pokémon no tiene más evoluciones', { icon: 'ℹ️' }); return; }
-      const evoResult = await searchPokemon(nextEvo);
-      if (!evoResult) { toast.error('No se pudo cargar la evolución'); return; }
-      updatePokemon(pokemon.id, { pokedexId: evoResult.id, name: evoResult.name, types: evoResult.types, sprite: evoResult.sprite, spriteShiny: evoResult.spriteShiny, stats: evoResult.stats });
-      toast.success(`¡${pokemon.nickname} evolucionó a ${evoResult.name}!`);
-    } catch {
-      toast.dismiss(t);
-      toast.error('Error al buscar evolución');
-    }
-  };
-
-  const handleMoveToTeam = (id: string) => {
-    if (team.length >= 6) { toast.error('El equipo ya está lleno (6/6)'); return; }
-    if (id === selectedPokemonId) onSelectPokemon?.(null);
-    moveToTeam(id);
-    play('move');
-    toast.success('Pokémon movido al equipo');
-  };
-
-  const handleExportShowdown = () => {
-    const text = pc.map(p => [`${p.nickname} (${p.name.charAt(0).toUpperCase() + p.name.slice(1)})`, `Ability: ${p.ability}`, `Level: ${p.level}`].join('\n')).join('\n\n');
-    navigator.clipboard.writeText(text);
-    toast.success('PC copiada en formato Showdown!');
-  };
-
-  const handleCardClick = (pokemon: TeamPokemon) => {
-    if (selectedPokemonId === pokemon.id) {
-      onSelectPokemon?.(null);
-    } else {
-      onSelectPokemon?.(pokemon);
-    }
+  const handleAddVersus = () => {
+    if (!versusForm.opponent.trim()) return;
+    addVersus({
+      id: crypto.randomUUID(),
+      opponent: versusForm.opponent,
+      result: versusForm.result,
+      date: new Date().toLocaleDateString('es-MX'),
+      notes: versusForm.notes,
+    });
+    setVersusForm({ opponent: '', result: 'win', notes: '' });
+    setShowVersusForm(false);
+    toast.success('Resultado registrado');
   };
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-white font-bold text-lg flex items-center gap-2">
-          💾 PC Box
-          <span className="text-white/40 text-sm font-normal">{pc.length} Pokémon</span>
-        </h2>
-        <div className="flex gap-2">
-          {pc.length > 0 && (
-            <button onClick={handleExportShowdown}
-              className="poke-btn bg-purple-900 hover:bg-purple-800 text-white text-xs px-3 py-2">
-              Showdown
-            </button>
-          )}
-          <button onClick={() => setShowAdd(true)}
-            className="poke-btn bg-blue-800 hover:bg-blue-700 text-white text-sm px-4 py-2">
-            + Agregar a PC
+    <div className="space-y-4">
+
+      {/* ── Fila 1: Estado (destacado) + MVP ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+        {/* Estado de partida — tarjeta destacada */}
+        <div className="md:col-span-1 rounded-xl border border-blue-500/30 bg-blue-950/40 p-4 shadow-lg shadow-blue-900/20">
+          <h2 className="text-white font-bold mb-3 flex items-center gap-2 text-sm uppercase tracking-wider">
+            <span>📊</span> Estado de Partida
+          </h2>
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="bg-black/30 rounded-lg p-2 text-center border border-white/5">
+              <div className="text-2xl font-bold text-green-400">{team.length}</div>
+              <div className="text-white/40 text-xs mt-0.5">En equipo</div>
+            </div>
+            <div className="bg-black/30 rounded-lg p-2 text-center border border-white/5">
+              <div className="text-2xl font-bold text-red-400">{cemetery.length}</div>
+              <div className="text-white/40 text-xs mt-0.5">Caídos</div>
+            </div>
+            <div className="bg-black/30 rounded-lg p-2 text-center border border-yellow-900/30">
+              <div className="text-2xl font-bold text-yellow-400">{settings.resurrectionTokens}</div>
+              <div className="text-white/40 text-xs mt-0.5">🪙 Tokens</div>
+            </div>
+            <div className="bg-black/30 rounded-lg p-2 text-center border border-red-900/30">
+              <div className="text-2xl font-bold text-red-600">{settings.wipeCount}</div>
+              <div className="text-white/40 text-xs mt-0.5">💀 Wipes</div>
+            </div>
+          </div>
+          <button
+            onClick={() => { if (confirm('¿Registrar un wipe?')) { incrementWipe(); toast('💀 Wipe registrado'); }}}
+            className="w-full py-2 rounded-lg bg-red-900/30 hover:bg-red-900/50 text-red-400 text-xs font-bold border border-red-900/30 transition-colors">
+            + Registrar Wipe
           </button>
+        </div>
+
+        {/* MVP del equipo */}
+        <div className="md:col-span-1 bg-black/20 rounded-xl border border-white/10 p-4">
+          <h2 className="text-white font-bold mb-3 flex items-center gap-2 text-sm uppercase tracking-wider">
+            <span>⭐</span> MVP
+          </h2>
+          {mvp ? (
+            <div className="flex flex-col items-center text-center">
+              <div className="relative">
+                <img src={mvp.isShiny ? mvp.spriteShiny : mvp.sprite} alt={mvp.name}
+                  className="w-20 h-20 object-contain drop-shadow-lg" />
+                {mvp.isShiny && <span className="absolute top-0 right-0 text-sm">✨</span>}
+              </div>
+              <div className="text-white font-bold">{mvp.nickname}</div>
+              <div className="text-white/40 text-xs capitalize">{mvp.name}</div>
+              <div className="flex gap-1 mt-1 justify-center flex-wrap">
+                {mvp.types.map(t => (
+                  <span key={t} className="type-badge text-white text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: TYPE_COLORS[t as PokemonType] }}>{t}</span>
+                ))}
+              </div>
+              <div className="mt-2 text-white/40 text-xs capitalize">🔮 {mvp.ability}</div>
+              <div className="mt-1 text-white/30 text-xs">
+                Total: <span className="text-white/60 font-bold">
+                  {Object.values(mvp.stats).reduce((a,b)=>a+b,0)}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center text-white/20 py-6">
+              <div className="text-3xl mb-2">🎮</div>
+              <p className="text-xs">Agrega Pokémon al equipo</p>
+            </div>
+          )}
+        </div>
+
+        {/* Reglas — compactas y colapsables */}
+        <div className="md:col-span-1 bg-black/20 rounded-xl border border-white/10 p-4">
+          <button
+            onClick={() => setShowRules(!showRules)}
+            className="w-full flex items-center justify-between mb-2">
+            <h2 className="text-white font-bold text-sm uppercase tracking-wider flex items-center gap-2">
+              <span>📋</span> Reglas Nuzlocke
+            </h2>
+            <span className="text-white/30 text-xs">{showRules ? '▲' : '▼'}</span>
+          </button>
+          <div className="flex gap-1 flex-wrap mb-2">
+            {rules.filter(r => r.enabled).map(r => (
+              <span key={r.id} className="text-xs bg-green-900/30 text-green-300 border border-green-900/40 px-2 py-0.5 rounded-full">
+                ✓
+              </span>
+            ))}
+            <span className="text-white/30 text-xs self-center ml-1">
+              {rules.filter(r=>r.enabled).length}/{rules.length} activas
+            </span>
+          </div>
+          {showRules && (
+            <div className="space-y-1.5 mt-2">
+              {rules.map(rule => (
+                <label key={rule.id} className="flex items-start gap-2 cursor-pointer">
+                  <div onClick={() => toggleRule(rule.id)}
+                    className={`mt-0.5 w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+                      rule.enabled ? 'bg-green-500 border-green-500' : 'bg-transparent border-white/20'
+                    }`}>
+                    {rule.enabled && <span className="text-white text-xs leading-none">✓</span>}
+                  </div>
+                  <span className={`text-xs transition-colors leading-relaxed ${
+                    rule.enabled ? 'text-white/70' : 'text-white/25 line-through'
+                  }`}>{rule.label}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Buscador */}
-      {pc.length > 0 && (
-        <input
-          className="w-full bg-black/30 text-white rounded-lg px-3 py-2 border border-white/10 outline-none placeholder:text-white/30 text-sm"
-          placeholder="🔍 Buscar en la PC..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-      )}
-
-      {/* Grid estilo PC Pokémon */}
-      {filtered.length === 0 ? (
-        <div className="text-center text-white/30 py-16">
-          <div className="text-5xl mb-3">💾</div>
-          <p>{pc.length === 0 ? 'La PC está vacía' : 'Sin resultados'}</p>
+      {/* ── Fila 2: Medallas ── */}
+      <div className="bg-black/20 rounded-xl border border-white/10 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-white font-bold flex items-center gap-2 text-sm uppercase tracking-wider">
+            <span>🏅</span> Medallas
+            {league && <span className="text-white/30 text-xs font-normal normal-case">— {league.region}</span>}
+          </h2>
+          {league && badges.length === 0 && (
+            <button onClick={initBadges}
+              className="text-xs px-3 py-1 rounded-lg bg-yellow-900/40 hover:bg-yellow-900/60 text-yellow-300 border border-yellow-900/40 transition-colors">
+              Cargar medallas
+            </button>
+          )}
         </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
-          {filtered.map(pokemon => (
-            <PCCard
-              key={pokemon.id}
-              pokemon={pokemon}
-              isSelected={selectedPokemonId === pokemon.id}
-              isEditing={editingId === pokemon.id}
-              editNick={editNick}
-              editLevel={editLevel}
-              editAbility={editAbility}
-              editStats={editStats}
-              onEditNick={setEditNick}
-              onEditLevel={setEditLevel}
-              onEditAbility={setEditAbility}
-              onEditStats={setEditStats}
-              onStartEdit={() => handleStartEdit(pokemon)}
-              onSaveEdit={handleSaveEdit}
-              onCancelEdit={() => setEditingId(null)}
-              onEvolve={() => handleEvolve(pokemon)}
-              onMoveToTeam={() => handleMoveToTeam(pokemon.id)}
-              onRemove={() => { if (pokemon.id === selectedPokemonId) onSelectPokemon?.(null); removeFromPC(pokemon.id); toast('Pokémon eliminado'); }}
-              onSendToCemetery={() => { setSelectedId(pokemon.id); setShowDeath(true); }}
-              onToggleShiny={() => updatePokemon(pokemon.id, { isShiny: !pokemon.isShiny })}
-              onOpenDetail={() => setDetailPokemon(pokemon)}
-              onClick={() => handleCardClick(pokemon)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Modal Agregar */}
-      {showAdd && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-gray-900 border border-white/20 rounded-2xl p-6 w-full max-w-sm shadow-2xl my-4">
-            <h3 className="text-white font-bold text-lg mb-4">➕ Agregar a PC</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="text-white/50 text-xs block mb-1">Nombre o Nº Pokédex *</label>
-                <PokemonAutocomplete value={searchQuery} onChange={setSearchQuery} onSelect={handlePokemonSelect} placeholder="ej: pikachu / 25" />
+        {badges.length > 0 ? (
+          <>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-2 flex-1 bg-black/40 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-700"
+                  style={{
+                    width: `${(badges.filter(b=>b.obtained).length / badges.length)*100}%`,
+                    background: 'var(--theme-accent, #ff6b6b)'
+                  }} />
               </div>
-              <div>
-                <label className="text-white/50 text-xs block mb-1">Mote</label>
-                <input className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-white/10 outline-none placeholder:text-white/30 text-sm"
-                  placeholder="Nombre personalizado" value={nickname} onChange={e => setNickname(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-white/50 text-xs block mb-1">Ruta de captura</label>
-                <input className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-white/10 outline-none placeholder:text-white/30 text-sm"
-                  placeholder="ej: Ruta 1" value={route} onChange={e => setRoute(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-white/50 text-xs block mb-1">Nivel</label>
-                  <input type="number" min={1} max={100}
-                    className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-white/10 outline-none text-sm"
-                    value={level} onChange={e => setLevel(Number(e.target.value))} />
-                </div>
-                <div>
-                  <label className="text-white/50 text-xs block mb-1">Habilidad</label>
-                  <AbilityAutocomplete value={ability} onChange={setAbility} options={pokemonAbilities} placeholder="Habilidad..." />
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-white/50 text-xs">Stats del juego</label>
-                  <button onClick={() => setUseCustomStats(!useCustomStats)}
-                    className={`text-xs px-2 py-0.5 rounded-lg border transition-all ${useCustomStats ? 'bg-blue-900/40 border-blue-600/40 text-blue-300' : 'bg-black/30 border-white/10 text-white/40 hover:text-white/70'}`}>
-                    {useCustomStats ? 'Editando' : 'Editar stats'}
-                  </button>
-                </div>
-                {useCustomStats ? (
-                  <div className="bg-black/20 rounded-xl p-3 border border-white/10">
-                    <StatsEditor stats={customStats} onChange={setCustomStats} level={level} />
-                  </div>
-                ) : loadedStats ? (
-                  <div className="bg-black/20 rounded-xl p-3 border border-white/10">
-                    <StatsEditor stats={loadedStats} onChange={() => {}} compact level={level} />
-                    <p className="text-white/30 text-xs mt-2 text-center">Stats al nivel {level} — activa "Editar stats" para modificar</p>
-                  </div>
-                ) : (
-                  <p className="text-white/20 text-xs text-center py-2">Selecciona un Pokémon para ver sus stats</p>
-                )}
-              </div>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={handleAdd} disabled={loading}
-                className="flex-1 py-2.5 rounded-xl bg-blue-800 hover:bg-blue-700 text-white font-bold transition-colors disabled:opacity-50">
-                {loading ? 'Buscando...' : '✔ Agregar'}
-              </button>
-              <button onClick={() => { setShowAdd(false); setSearchQuery(''); setLoadedStats(null); setUseCustomStats(false); setPokemonAbilities([]); }}
-                className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 transition-colors">
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Muerte */}
-      {showDeath && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-red-900/40 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h3 className="text-red-400 font-bold text-lg mb-1">🪦 Registrar muerte</h3>
-            <p className="text-white/40 text-sm mb-4">{pc.find(p => p.id === selectedId)?.nickname}</p>
-            <div className="space-y-3">
-              <input className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-red-900/30 outline-none placeholder:text-white/30"
-                placeholder="Causa de muerte *" value={deathForm.cause} onChange={e => setDeathForm(f => ({ ...f, cause: e.target.value }))} />
-              <input className="w-full bg-black/40 text-white rounded-lg px-3 py-2 border border-red-900/30 outline-none placeholder:text-white/30"
-                placeholder="Responsable" value={deathForm.killedBy} onChange={e => setDeathForm(f => ({ ...f, killedBy: e.target.value }))} />
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={handleSendToCemetery}
-                className="flex-1 py-2.5 rounded-xl bg-red-900 hover:bg-red-800 text-white font-bold transition-colors">
-                🪦 Confirmar
-              </button>
-              <button onClick={() => { setShowDeath(false); setSelectedId(null); }}
-                className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 transition-colors">
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {detailPokemon && (
-        <PokemonDetailModal pokemon={detailPokemon} onClose={() => setDetailPokemon(null)} />
-      )}
-    </div>
-  );
-}
-
-// ── PC Card ──────────────────────────────────────────────────────
-interface PCCardProps {
-  pokemon: TeamPokemon;
-  isSelected: boolean;
-  isEditing: boolean;
-  editNick: string; editLevel: number; editAbility: string; editStats: BaseStat;
-  onEditNick: (v: string) => void; onEditLevel: (v: number) => void;
-  onEditAbility: (v: string) => void; onEditStats: (s: BaseStat) => void;
-  onStartEdit: () => void; onSaveEdit: () => void; onCancelEdit: () => void;
-  onEvolve: () => void; onMoveToTeam: () => void; onRemove: () => void;
-  onSendToCemetery: () => void; onToggleShiny: () => void; onOpenDetail: () => void;
-  onClick: () => void;
-}
-
-function PCCard({
-  pokemon, isSelected, isEditing,
-  editNick, editLevel, editAbility, editStats,
-  onEditNick, onEditLevel, onEditAbility, onEditStats,
-  onStartEdit, onSaveEdit, onCancelEdit, onEvolve,
-  onMoveToTeam, onRemove, onSendToCemetery, onToggleShiny, onOpenDetail,
-  onClick,
-}: PCCardProps) {
-  const [showMenu, setShowMenu] = useState(false);
-
-  return (
-    <div
-      onClick={() => { if (!showMenu) onClick(); }}
-      className={`relative flex flex-col items-center gap-1.5 p-2 cursor-pointer transition-all duration-150 select-none
-        border-2 rounded-lg
-        ${isSelected
-          ? 'border-yellow-400/80 bg-yellow-400/10 shadow-[0_0_12px_rgba(250,204,21,0.3)]'
-          : 'border-white/15 bg-white/5 hover:border-white/30 hover:bg-white/10'
-        }`}
-    >
-      {/* Menu button */}
-      <button
-        onClick={e => { e.stopPropagation(); setShowMenu(!showMenu); }}
-        className="absolute top-1.5 right-1.5 text-white/30 hover:text-white text-base z-10 leading-none w-5 h-5 flex items-center justify-center"
-      >
-        ⋮
-      </button>
-
-      {showMenu && (
-        <div className="absolute top-7 right-1 z-20 bg-gray-900 border border-white/20 rounded-xl shadow-2xl overflow-hidden min-w-36"
-          onClick={e => e.stopPropagation()}>
-          <button onClick={() => { onStartEdit(); setShowMenu(false); }} className="w-full text-left px-3 py-2 text-white/80 hover:bg-white/10 text-xs">✏️ Editar</button>
-          <button onClick={() => { onEvolve(); setShowMenu(false); }} className="w-full text-left px-3 py-2 text-blue-400 hover:bg-blue-900/30 text-xs">🔄 Evolucionar</button>
-          <button onClick={() => { onOpenDetail(); setShowMenu(false); }} className="w-full text-left px-3 py-2 text-white/80 hover:bg-white/10 text-xs">📋 Ver detalle</button>
-          <button onClick={() => { onToggleShiny(); setShowMenu(false); }} className="w-full text-left px-3 py-2 text-yellow-400 hover:bg-yellow-900/20 text-xs">✨ {pokemon.isShiny ? 'Normal' : 'Shiny'}</button>
-          <button onClick={() => { onMoveToTeam(); setShowMenu(false); }} className="w-full text-left px-3 py-2 text-green-400 hover:bg-green-900/30 text-xs">⚔️ Al equipo</button>
-          <button onClick={() => { onSendToCemetery(); setShowMenu(false); }} className="w-full text-left px-3 py-2 text-red-400 hover:bg-red-900/30 text-xs">🪦 Cementerio</button>
-          <button onClick={() => { onRemove(); setShowMenu(false); }} className="w-full text-left px-3 py-2 text-white/30 hover:bg-white/5 text-xs">🗑️ Eliminar</button>
-        </div>
-      )}
-
-      {isEditing ? (
-        <div className="space-y-1.5 w-full" onClick={e => e.stopPropagation()}>
-          <input className="w-full bg-black/40 text-white text-xs rounded px-2 py-1 border border-white/20 outline-none"
-            value={editNick} onChange={e => onEditNick(e.target.value)} placeholder="Mote" />
-          <input type="number" min={1} max={100}
-            className="w-full bg-black/40 text-white text-xs rounded px-2 py-1 border border-white/20 outline-none"
-            value={editLevel} onChange={e => onEditLevel(Number(e.target.value))} />
-          <AbilityAutocomplete value={editAbility} onChange={onEditAbility} placeholder="Habilidad..." />
-          <div className="bg-black/20 rounded p-2 border border-white/10">
-            <StatsEditor stats={editStats} onChange={onEditStats} level={editLevel} />
-          </div>
-          <div className="flex gap-1">
-            <button onClick={onSaveEdit} className="flex-1 py-1 rounded bg-green-800 hover:bg-green-700 text-white text-xs font-bold">✔</button>
-            <button onClick={onCancelEdit} className="flex-1 py-1 rounded bg-white/10 hover:bg-white/20 text-white/60 text-xs">✗</button>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Sprite */}
-          <div className="relative w-14 h-14 flex items-center justify-center">
-            <img
-              src={pokemon.isShiny ? pokemon.spriteShiny : pokemon.sprite}
-              alt={pokemon.name}
-              className="w-full h-full object-contain"
-              style={{ imageRendering: 'pixelated' }}
-            />
-            {pokemon.isShiny && <span className="absolute -top-1 -right-1 text-xs">✨</span>}
-          </div>
-
-          {/* Nivel */}
-          <span className="text-white/50 text-[9px]" style={{ fontFamily: "'Press Start 2P', monospace" }}>
-            Lv.{pokemon.level}
-          </span>
-
-          {/* Nombre */}
-          <div className="text-center w-full">
-            <div className="text-white text-[10px] font-bold truncate leading-tight"
-              style={{ fontFamily: "'Press Start 2P', monospace" }}>
-              {pokemon.nickname}
-            </div>
-            <div className="text-white/30 text-[8px] capitalize truncate">{pokemon.name}</div>
-          </div>
-
-          {/* Tipos */}
-          <div className="flex gap-0.5 flex-wrap justify-center">
-            {pokemon.types.map(t => (
-              <span key={t} className="text-white text-[7px] px-1.5 py-0.5 rounded-sm font-bold uppercase"
-                style={{ background: TYPE_COLORS[t as PokemonType] }}>
-                {t}
+              <span className="text-white/50 text-xs font-bold">
+                {badges.filter(b=>b.obtained).length}/{badges.length}
               </span>
-            ))}
+            </div>
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+              {badges.map(badge => (
+                <button key={badge.id} onClick={() => toggleBadge(badge.id)}
+                  className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
+                    badge.obtained
+                      ? 'border-yellow-400/60 bg-yellow-400/10 scale-105'
+                      : 'border-white/10 bg-black/20 opacity-40 hover:opacity-70'
+                  }`}>
+                  <span className="text-xl">{badge.obtained ? '🏅' : '⭕'}</span>
+                  <span className="text-white text-xs text-center leading-tight">{badge.name}</span>
+                </button>
+              ))}
+            </div>
+            {league && league.eliteFour.length > 0 && (
+              <div className="mt-4">
+                <p className="text-white/30 text-xs mb-2 uppercase tracking-wider">Alto Mando</p>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {league.eliteFour.map((e4, i) => (
+                    <div key={i} className="bg-black/20 rounded-lg p-2 text-center border border-white/5">
+                      <div className="text-white text-xs font-bold">{e4.name}</div>
+                      <div className="text-xs mt-0.5"
+                        style={{ color: TYPE_COLORS[e4.type.toLowerCase() as PokemonType] || '#888' }}>
+                        {e4.type}
+                      </div>
+                    </div>
+                  ))}
+                  <div className="bg-yellow-900/20 rounded-lg p-2 text-center border border-yellow-900/30">
+                    <div className="text-yellow-300 text-xs font-bold">👑 {league.champion}</div>
+                    <div className="text-yellow-600 text-xs">Campeón</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center text-white/20 py-4">
+            <div className="text-3xl mb-2">🏅</div>
+            <p className="text-xs">{league ? 'Haz clic en "Cargar medallas"' : 'Selecciona un juego en configuración'}</p>
           </div>
-        </>
-      )}
+        )}
+      </div>
+
+      {/* ── Fila 3: Versus ── */}
+      <div className="bg-black/20 rounded-xl border border-white/10 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-white font-bold flex items-center gap-2 text-sm uppercase tracking-wider">
+            <span>⚔️</span> Historial Versus
+          </h2>
+          <button onClick={() => setShowVersusForm(!showVersusForm)}
+            className="text-xs px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors">
+            + Agregar
+          </button>
+        </div>
+        <div className="flex gap-2 mb-3">
+          <div className="flex-1 bg-green-900/20 rounded-lg p-2 text-center border border-green-900/30">
+            <div className="text-green-400 font-bold text-xl">{wins}</div>
+            <div className="text-green-600 text-xs">Victorias</div>
+          </div>
+          <div className="flex-1 bg-red-900/20 rounded-lg p-2 text-center border border-red-900/30">
+            <div className="text-red-400 font-bold text-xl">{losses}</div>
+            <div className="text-red-600 text-xs">Derrotas</div>
+          </div>
+          <div className="flex-1 bg-gray-800/30 rounded-lg p-2 text-center border border-gray-700/30">
+            <div className="text-gray-400 font-bold text-xl">{draws}</div>
+            <div className="text-gray-500 text-xs">Empates</div>
+          </div>
+        </div>
+        {showVersusForm && (
+          <div className="bg-black/20 rounded-lg p-3 mb-3 border border-white/10 space-y-2">
+            <input className="w-full bg-black/40 text-white text-sm rounded px-3 py-2 border border-white/10 outline-none placeholder:text-white/30"
+              placeholder="Nombre del rival" value={versusForm.opponent}
+              onChange={e => setVersusForm(f => ({ ...f, opponent: e.target.value }))} />
+            <select className="w-full bg-black/40 text-white text-sm rounded px-3 py-2 border border-white/10 outline-none"
+              value={versusForm.result}
+              onChange={e => setVersusForm(f => ({ ...f, result: e.target.value as 'win'|'loss'|'draw' }))}>
+              <option value="win">Victoria ✅</option>
+              <option value="loss">Derrota ❌</option>
+              <option value="draw">Empate 🤝</option>
+            </select>
+            <input className="w-full bg-black/40 text-white text-sm rounded px-3 py-2 border border-white/10 outline-none placeholder:text-white/30"
+              placeholder="Notas (opcional)" value={versusForm.notes}
+              onChange={e => setVersusForm(f => ({ ...f, notes: e.target.value }))} />
+            <div className="flex gap-2">
+              <button onClick={handleAddVersus}
+                className="flex-1 py-1.5 rounded-lg bg-green-900/50 hover:bg-green-900/70 text-green-300 text-sm font-bold transition-colors">
+                Guardar
+              </button>
+              <button onClick={() => setShowVersusForm(false)}
+                className="flex-1 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/60 text-sm transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="space-y-1.5 max-h-40 overflow-y-auto">
+          {versus.length === 0 ? (
+            <p className="text-white/20 text-sm text-center py-3">Sin registros aún</p>
+          ) : (
+            versus.slice(0,10).map(v => (
+              <div key={v.id} className="flex items-center gap-2 bg-black/20 rounded-lg px-3 py-2">
+                <span className="text-lg">{v.result==='win'?'✅':v.result==='loss'?'❌':'🤝'}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-white text-sm font-bold truncate">{v.opponent}</div>
+                  <div className="text-white/50 text-xs">{v.date}</div>
+                </div>
+                <button onClick={() => removeVersus(v.id)}
+                  className="text-white/20 hover:text-red-400 transition-colors text-xs">✗</button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
