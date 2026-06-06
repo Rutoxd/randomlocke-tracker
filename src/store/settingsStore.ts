@@ -28,6 +28,13 @@ export const useUIStore = create<UIState>()(
       openModal: (name) => set({ modalOpen: name }),
       closeModal: () => set({ modalOpen: null }),
     }),
-    { name: 'randomlocke-ui' }
+    {
+      name: 'randomlocke-ui',
+      partialize: (state) => ({
+        activeTab: state.activeTab,
+        searchQuery: state.searchQuery,
+        selectedPokemonId: state.selectedPokemonId,
+      }),
+    }
   )
 );
