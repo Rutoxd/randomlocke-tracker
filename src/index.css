@@ -1,240 +1,315 @@
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&family=Nunito:wght@400;600;700;800&display=swap');
 
-import { useEffect, useRef, useState } from 'react';
-import { Toaster } from 'react-hot-toast';
-import { useGameStore } from './store/gameStore';
-import { useUIStore } from './store/settingsStore';
-import TopBar from './components/TopBar';
-import Dashboard from './components/Dashboard';
-import ActiveTeam from './components/ActiveTeam';
-import PCBox from './components/PCBox';
-import Cemetery from './components/Cemetery';
-import Pokedex from './components/Pokedex';
-import TeamSimulator from './components/TeamSimulator';
-import Bag from './components/Bag';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-const TABS = [
-  { id: 'dashboard',  label: 'DASH',  icon: '◈' },
-  { id: 'team',       label: 'EQUIP', icon: '⚔' },
-  { id: 'pc',         label: 'PC',    icon: '▣' },
-  { id: 'cemetery',   label: 'RIP',   icon: '✝' },
-  { id: 'simulator',  label: 'SIM',   icon: '◉' },
-  { id: 'bag',        label: 'MOCH',  icon: '▲' },
-];
-
-export default function App() {
-  const theme     = useGameStore(s => s.settings.theme);
-  const activeTab = useUIStore(s => s.activeTab);
-  const setTab    = useUIStore(s => s.setActiveTab);
-  const prevTabRef = useRef<string>(activeTab);
-  const [, setPcSelectedPokemon] = useState<string | null>(null);
-
-  useEffect(() => {
-    document.documentElement.className = `theme-${theme} dark`;
-  }, [theme]);
-
-  useEffect(() => {
-    if (prevTabRef.current === 'pc' && activeTab !== 'pc') {
-      setPcSelectedPokemon(null);
-    }
-    prevTabRef.current = activeTab;
-  }, [activeTab]);
-
-  const renderTab = () => {
-    switch (activeTab) {
-      case 'dashboard':  return <Dashboard />;
-      case 'team':       return <ActiveTeam />;
-      case 'pc':         return <PCBox />;
-      case 'cemetery':   return <Cemetery />;
-      case 'pokedex':    return <Pokedex />;
-      case 'simulator':  return <TeamSimulator />;
-      case 'bag':        return <Bag />;
-      default:           return <Dashboard />;
-    }
-  };
-
-  return (
-    <div className={`theme-${theme} min-h-screen bg-[#0a0a0f] flex items-center justify-center p-2 md:p-4`}>
-      <div className="w-full max-w-7xl">
-
-        {/* ── Cuerpo Pokédex ── */}
-        <div className="pokedex-body flex" style={{ minHeight: '600px' }}>
-
-          {/* ══ MITAD IZQUIERDA ══ */}
-          <div className="pokedex-left flex flex-col flex-1 p-3 gap-3" style={{ minWidth: 0 }}>
-
-            {/* Decoración superior izquierda */}
-            <div className="flex items-center gap-3">
-              {/* Gran LED azul circular */}
-              <div className="relative flex-shrink-0"
-                style={{ width: 52, height: 52 }}>
-                <div style={{
-                  width: 52, height: 52,
-                  borderRadius: '50%',
-                  background: 'radial-gradient(circle at 35% 35%, #88ddff, #0066cc)',
-                  border: '3px solid #003366',
-                  boxShadow: '0 0 12px #4af, 0 0 24px #08f, inset 0 2px 4px rgba(255,255,255,0.4)',
-                  position: 'relative',
-                }}>
-                  <div style={{
-                    position: 'absolute', top: '20%', left: '20%',
-                    width: '30%', height: '30%',
-                    borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.7)',
-                  }} />
-                </div>
-              </div>
-
-              {/* LEDs pequeños */}
-              <div className="flex gap-2 items-center">
-                <div className="led led-red"    />
-                <div className="led led-yellow" />
-                <div className="led led-green"  />
-              </div>
-
-              {/* TopBar en la esquina derecha */}
-              <div className="flex-1 min-w-0">
-                <TopBar />
-              </div>
-            </div>
-
-            {/* Pantalla principal LCD */}
-            <div className="pokedex-screen-main scanlines flex-1 flex flex-col"
-              style={{ minHeight: 0 }}>
-
-              {/* Barra de tabs pixel */}
-              <div className="flex gap-0.5 p-1.5 bg-black/40 border-b border-white/10 flex-wrap">
-                {TABS.map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setTab(tab.id)}
-                    className={`pixel-tab ${activeTab === tab.id ? 'active' : ''}`}
-                  >
-                    <span className="mr-1">{tab.icon}</span>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Contenido */}
-              <div className="flex-1 overflow-y-auto p-3"
-                style={{ fontFamily: "'VT323', monospace", fontSize: '16px', color: '#e0e0e0' }}>
-                {renderTab()}
-              </div>
-            </div>
-
-            {/* Decoración inferior izquierda */}
-            <div className="flex items-center justify-between px-1">
-              {/* D-Pad */}
-              <div className="dpad">
-                <div className="dpad-btn up">▲</div>
-                <div className="dpad-btn left">◄</div>
-                <div className="dpad-btn center" />
-                <div className="dpad-btn right">►</div>
-                <div className="dpad-btn down">▼</div>
-              </div>
-
-              {/* Botones acción */}
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col items-center gap-1">
-                  <div className="btn-a" />
-                  <span style={{ fontFamily: "'Press Start 2P'", fontSize: '7px', color: '#ff6666' }}>A</span>
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <div className="btn-b" />
-                  <span style={{ fontFamily: "'Press Start 2P'", fontSize: '7px', color: '#6666ff' }}>B</span>
-                </div>
-              </div>
-
-              {/* Botón amarillo START */}
-              <div className="flex flex-col items-center gap-1">
-                <div className="btn-yellow" />
-                <span style={{ fontFamily: "'Press Start 2P'", fontSize: '6px', color: '#cccc00' }}>START</span>
-              </div>
-
-              {/* Barra amarilla */}
-              <div style={{
-                width: 60, height: 14,
-                background: 'linear-gradient(to right, #cc0, #ff0, #cc0)',
-                border: '2px solid #880',
-                boxShadow: '0 2px 0 #440, 0 0 8px rgba(255,220,0,0.3)',
-              }} />
-            </div>
-          </div>
-
-          {/* ══ BISAGRA ══ */}
-          <div className="pokedex-hinge" />
-
-          {/* ══ MITAD DERECHA ══ */}
-          <div className="pokedex-right flex flex-col p-3 gap-3"
-            style={{ width: '320px', flexShrink: 0 }}>
-
-            {/* Panel superior rayado decorativo */}
-            <div style={{
-              height: 40,
-              background: 'repeating-linear-gradient(45deg, #1a0000, #1a0000 4px, #0a0000 4px, #0a0000 8px)',
-              border: '2px solid #0a0000',
-              borderRadius: '2px',
-            }} />
-
-            {/* Pantalla secundaria — Pokédex */}
-            <div className="pokedex-screen-side scanlines flex-1 flex flex-col" style={{ minHeight: 0 }}>
-              <Pokedex />
-            </div>
-
-            {/* Botones blancos decorativos */}
-            <div className="flex gap-2 items-center">
-              <div style={{
-                flex: 1, height: 20,
-                background: 'linear-gradient(to bottom, #eee, #ccc)',
-                border: '2px solid #888',
-                boxShadow: '0 2px 0 #555',
-                borderRadius: '2px',
-              }} />
-              <div style={{
-                flex: 1, height: 20,
-                background: 'linear-gradient(to bottom, #eee, #ccc)',
-                border: '2px solid #888',
-                boxShadow: '0 2px 0 #555',
-                borderRadius: '2px',
-              }} />
-              <div className="btn-yellow flex-shrink-0" />
-            </div>
-
-            {/* Rejillas negras decorativas inferiores */}
-            <div className="flex gap-2">
-              {[0,1].map(i => (
-                <div key={i} style={{
-                  flex: 1, height: 32,
-                  background: 'repeating-linear-gradient(90deg, #0a0000, #0a0000 3px, #150000 3px, #150000 6px)',
-                  border: '2px solid #0a0000',
-                  borderRadius: '2px',
-                }} />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Pie — texto pixel */}
-        <div className="text-center mt-2"
-          style={{ fontFamily: "'Press Start 2P'", fontSize: '8px', color: 'rgba(255,255,255,0.2)' }}>
-          RANDOMLOCKE TRACKER v1.0 — GAME FREAK / NINTENDO
-        </div>
-      </div>
-
-      <Toaster
-        position="bottom-right"
-        toastOptions={{
-          style: {
-            background: '#1a0000',
-            color: '#fff',
-            border: '2px solid rgba(255,0,0,0.3)',
-            fontFamily: "'VT323', monospace",
-            fontSize: '18px',
-            borderRadius: 0,
-          }
-        }}
-      />
-    </div>
-  );
+@layer base {
+  :root {
+    --theme-primary:   #CC0000;
+    --theme-secondary: #8B0000;
+    --theme-accent:    #ff6b6b;
+    --theme-hinge:     #4a0000;
+  }
+  * { box-sizing: border-box; image-rendering: pixelated; }
+  body {
+    font-family: 'VT323', monospace;
+    background: #0a0a0f;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  ::-webkit-scrollbar       { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: #0a0a0a; }
+  ::-webkit-scrollbar-thumb { background: var(--theme-primary); border-radius: 0; }
 }
+
+.font-pixel { font-family: 'Press Start 2P', monospace; }
+.font-vt    { font-family: 'VT323', monospace; }
+
+.pokedex-body {
+  background: linear-gradient(160deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);
+  border-radius: 16px 16px 12px 12px;
+  box-shadow:
+    0 0 0 3px #1a0000,
+    0 0 0 5px var(--theme-hinge),
+    0 8px 32px rgba(0,0,0,0.7),
+    inset 0 2px 0 rgba(255,255,255,0.15),
+    inset 0 -2px 0 rgba(0,0,0,0.3);
+  position: relative;
+}
+.pokedex-body::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 13px;
+  border: 2px solid rgba(255,255,255,0.08);
+  pointer-events: none;
+}
+
+.pokedex-left {
+  background: linear-gradient(160deg, #c00 0%, #800 100%);
+  border-radius: 14px 6px 6px 12px;
+  border-right: 4px solid #1a0000;
+  position: relative;
+}
+
+.pokedex-right {
+  background: linear-gradient(160deg, #b00 0%, #700 100%);
+  border-radius: 6px 14px 12px 6px;
+  position: relative;
+}
+
+.pokedex-hinge {
+  width: 10px;
+  background: linear-gradient(to bottom, #2a0000, #1a0000, #2a0000);
+  box-shadow: inset 2px 0 4px rgba(0,0,0,0.5), inset -2px 0 4px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+  position: relative;
+}
+.pokedex-hinge::before,
+.pokedex-hinge::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #0a0000;
+  box-shadow: 0 0 2px rgba(255,255,255,0.1);
+}
+.pokedex-hinge::before { top: 20%; }
+.pokedex-hinge::after  { top: 70%; }
+
+.pokedex-screen-main {
+  background: #0d1a0d;
+  border: 3px solid #0a1200;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 2px 12px rgba(0,0,0,0.9),
+    inset 0 0 30px rgba(0,50,0,0.2),
+    0 1px 0 rgba(255,255,255,0.05);
+  position: relative;
+  overflow: hidden;
+}
+.pokedex-screen-main::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
+.pokedex-screen-side {
+  background: #000d1a;
+  border: 2px solid #000810;
+  border-radius: 4px;
+  box-shadow:
+    inset 0 2px 8px rgba(0,0,0,0.9),
+    inset 0 0 20px rgba(0,30,60,0.3);
+  position: relative;
+  overflow: hidden;
+}
+.pokedex-screen-side::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.05) 2px, rgba(0,0,0,0.05) 4px
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
+.led { border-radius: 50%; display: inline-block; position: relative; }
+.led::after {
+  content: '';
+  position: absolute;
+  top: 20%; left: 20%;
+  width: 30%; height: 30%;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.6);
+}
+.led-blue   { background: #4af; box-shadow: 0 0 8px #4af, 0 0 16px #48f; width:14px; height:14px; }
+.led-red    { background: #f44; box-shadow: 0 0 6px #f44; width:8px; height:8px; }
+.led-yellow { background: #ff4; box-shadow: 0 0 6px #ff4; width:8px; height:8px; }
+.led-green  { background: #4f8; box-shadow: 0 0 6px #4f8; width:8px; height:8px; animation: ledPulse 2s ease-in-out infinite; }
+
+@keyframes ledPulse {
+  0%,100% { opacity: 1; box-shadow: 0 0 6px #4f8; }
+  50%     { opacity: 0.5; box-shadow: 0 0 2px #4f8; }
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+  width: 52px; height: 52px;
+  gap: 1px;
+}
+.dpad-btn {
+  background: #1a0000;
+  border: 1px solid #0a0000;
+  cursor: default;
+  display: flex; align-items: center; justify-content: center;
+  color: #333; font-size: 8px;
+}
+.dpad-btn.center { border-radius: 2px; background: #110000; }
+.dpad-btn.up    { border-radius: 2px 2px 0 0; grid-column: 2; grid-row: 1; }
+.dpad-btn.right { border-radius: 0 2px 2px 0; grid-column: 3; grid-row: 2; }
+.dpad-btn.down  { border-radius: 0 0 2px 2px; grid-column: 2; grid-row: 3; }
+.dpad-btn.left  { border-radius: 2px 0 0 2px; grid-column: 1; grid-row: 2; }
+
+.btn-a {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f66, #c00);
+  border: 2px solid #800;
+  box-shadow: 0 2px 0 #600, 0 0 4px rgba(255,0,0,0.3);
+}
+.btn-b {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #66f, #00c);
+  border: 2px solid #008;
+  box-shadow: 0 2px 0 #006;
+}
+.btn-yellow {
+  width: 18px; height: 18px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ff8, #cc0);
+  border: 2px solid #880;
+  box-shadow: 0 2px 0 #660;
+}
+
+.pixel-tab {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  padding: 6px 10px;
+  border: 2px solid transparent;
+  border-radius: 0;
+  cursor: pointer;
+  transition: all 0.1s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+}
+.pixel-tab.active {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.3);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 0 rgba(0,0,0,0.4);
+}
+.pixel-tab:not(.active) {
+  background: rgba(0,0,0,0.3);
+  color: rgba(255,255,255,0.4);
+}
+.pixel-tab:not(.active):hover {
+  color: rgba(255,255,255,0.7);
+  background: rgba(0,0,0,0.4);
+}
+
+.pixel-card {
+  background: rgba(0,0,0,0.4);
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 0;
+  position: relative;
+}
+.pixel-card::after {
+  content: '';
+  position: absolute;
+  bottom: -2px; right: -2px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  border-right: 2px solid rgba(0,0,0,0.4);
+  border-bottom: 2px solid rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+
+.pokemon-slot {
+  position: relative;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-radius: 0;
+  transition: all 0.15s;
+  cursor: pointer;
+  background: rgba(0,0,0,0.3);
+}
+.pokemon-slot:hover { border-color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); }
+.pokemon-slot.occupied { border-color: rgba(255,255,255,0.2); }
+.pokemon-slot.empty { border-style: dashed; opacity: 0.4; }
+
+.type-badge {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  padding: 3px 6px;
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid rgba(0,0,0,0.3);
+}
+
+.poke-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  padding: 8px 12px;
+  border-radius: 0;
+  border: 2px solid rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: all 0.1s;
+  text-transform: uppercase;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.5);
+  position: relative;
+  top: 0;
+}
+.poke-btn:active { top: 2px; box-shadow: 0 1px 0 rgba(0,0,0,0.5); }
+.poke-btn:hover  { border-color: rgba(255,255,255,0.4); }
+
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg, transparent 0px, transparent 3px,
+    rgba(0,0,0,0.08) 3px, rgba(0,0,0,0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 5;
+}
+
+.theme-red    { --theme-primary: #CC0000; --theme-secondary: #8B0000; --theme-accent: #ff6b6b; --theme-hinge: #4a0000; }
+.theme-blue   { --theme-primary: #1a6bcc; --theme-secondary: #0d4a99; --theme-accent: #6ba3ff; --theme-hinge: #001a4a; }
+.theme-green  { --theme-primary: #2d8a4e; --theme-secondary: #1a5c33; --theme-accent: #5dcc8a; --theme-hinge: #002a15; }
+.theme-gold   { --theme-primary: #c9a900; --theme-secondary: #8f7600; --theme-accent: #ffd700; --theme-hinge: #3a2a00; }
+.theme-silver { --theme-primary: #6a7fa0; --theme-secondary: #4a5c78; --theme-accent: #a8bcd4; --theme-hinge: #1a2030; }
+.theme-black  { --theme-primary: #2a2a3e; --theme-secondary: #1a1a2e; --theme-accent: #8888ff; --theme-hinge: #0a0a15; }
+
+.type-fire     { background: #F08030; color:#fff; }
+.type-water    { background: #6890F0; color:#fff; }
+.type-grass    { background: #78C850; color:#fff; }
+.type-electric { background: #F8D030; color:#333; }
+.type-psychic  { background: #F85888; color:#fff; }
+.type-ice      { background: #98D8D8; color:#333; }
+.type-dragon   { background: #7038F8; color:#fff; }
+.type-dark     { background: #705848; color:#fff; }
+.type-fairy    { background: #EE99AC; color:#333; }
+.type-normal   { background: #A8A878; color:#fff; }
+.type-fighting { background: #C03028; color:#fff; }
+.type-flying   { background: #A890F0; color:#fff; }
+.type-poison   { background: #A040A0; color:#fff; }
+.type-ground   { background: #E0C068; color:#333; }
+.type-rock     { background: #B8A038; color:#fff; }
+.type-bug      { background: #A8B820; color:#fff; }
+.type-ghost    { background: #705898; color:#fff; }
+.type-steel    { background: #B8B8D0; color:#333; }
+.type-unknown  { background: #68A090; color:#fff; }
+
+@keyframes borderPulse {
+  0%,100% { border-color: rgba(220,38,38,0.6); box-shadow: 0 0 0 0 rgba(220,38,38,0.2); }
+  50%     { border-color: rgba(220,38,38,1);   box-shadow: 0 0 12px 4px rgba(220,38,38,0.3); }
+}
+.alert-pulse { animation: borderPulse 2s ease-in-out infinite; }
+
+.text-glow-green { text-shadow: 0 0 8px rgba(74,255,136,0.8); }
+.text-glow-red   { text-shadow: 0 0 8px rgba(255,68,68,0.8); }
+.text-glow-blue  { text-shadow: 0 0 8px rgba(68,170,255,0.8); }
