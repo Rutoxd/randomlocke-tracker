@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&family=Nunito:wght@400;600;700;800&display=swap');
+
 import { useEffect, useRef, useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { useGameStore } from './store/gameStore';
