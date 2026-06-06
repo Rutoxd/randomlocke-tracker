@@ -44,17 +44,17 @@ export default function App() {
   }, [activeTab]);
 
   const renderTab = () => {
-    switch (activeTab) {
-      case 'dashboard':  return <Dashboard />;
-      case 'team':       return <ActiveTeam />;
-      case 'pc':         return <PCBox />;
-      case 'cemetery':   return <Cemetery />;
-      case 'pokedex':    return <Pokedex />;
-      case 'simulator':  return <TeamSimulator />;
-      case 'bag':        return <Bag />;
-      default:           return <Dashboard />;
-    }
-  };
+  console.log('activeTab:', activeTab);
+  switch (activeTab) {
+    case 'dashboard':  return <Dashboard />;
+    case 'team':       return <ActiveTeam />;
+    case 'pc':         return <PCBox />;
+    case 'cemetery':   return <Cemetery />;
+    case 'simulator':  return <TeamSimulator />;
+    case 'bag':        return <Bag />;
+    default:           return <div className="text-white p-4">Tab: {activeTab}</div>;
+  }
+};
 
   return (
     <div className={`theme-${theme} min-h-screen bg-[#0a0a0f] flex items-center justify-center p-2 md:p-4`}>
