@@ -30,10 +30,9 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: 'randomlocke-ui',
-      partialize: (state) => ({
-        activeTab: state.activeTab,
-        searchQuery: state.searchQuery,
-        selectedPokemonId: state.selectedPokemonId,
+      partialize: () => ({
+        searchQuery: '',
+        selectedPokemonId: null,
       }),
     }
   )
